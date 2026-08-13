@@ -13,57 +13,45 @@ Sổ tay ôn phỏng vấn Backend, tập trung vào kiến thức thực tế, 
 
 ### 2. Redis
 - [Redis Interview Notes](redis/redis.md)
-  - Cache-aside
-  - TTL / invalidation
-  - Cache stampede / penetration / avalanche
-  - Distributed lock
-  - Persistence / eviction
-  - Rate limiting
 
-### 3. Node.js
+### 3. Background Jobs
+- [Bull / BullMQ Interview Notes](background-jobs/bullmq.md)
+
+### 4. Node.js
 - [Node.js Interview Notes](nodejs/nodejs.md)
-  - Event Loop
-  - Promise / async-await
-  - Streams / backpressure
-  - Worker Threads
-  - Memory leak
-  - Graceful shutdown
 
-### 4. NestJS
-- NestJS Interview Notes *(đang hoàn thiện)*
-  - Dependency Injection
-  - Module / Provider
-  - Middleware / Guard / Interceptor / Pipe
-  - Exception Filter
+### 5. Nest
+- [Nest Core Notes](nest/core.md)
+- Request lifecycle / DI / guards / pipes / interceptors *(còn bổ sung)*
 
-### 5. PostgreSQL
+### 6. PostgreSQL
 - [PostgreSQL Interview Notes](postgresql/postgresql.md)
-  - MVCC
-  - VACUUM / ANALYZE
-  - B-tree / GIN / GiST / BRIN
-  - JSONB
-  - Connection pool
 
-### 6. MongoDB
+### 7. MongoDB
 - [MongoDB Interview Notes](mongodb/mongodb.md)
-  - Embed vs Reference
-  - Index / explain
-  - Aggregation
-  - Replica Set
-  - Sharding
 
-### 7. System Design
+### 8. AWS
+- [AWS Interview Notes](aws/aws-interview.md)
+
+### 9. Data Pipeline
+- [BigQuery & Data Pipeline](data/bigquery-pipeline.md)
+
+### 10. Production & CI/CD
+- [Production Operations & CI/CD](operations/production-ci-cd.md)
+
+### 11. System Design
 - [System Design Interview Notes](system-design/system-design.md)
-  - Load Balancer
-  - Horizontal scaling
-  - Cache / CDN
-  - Replication / Sharding
-  - Queue
-  - Kafka / RabbitMQ
-  - Rate Limit
-  - Circuit Breaker / Retry
-  - CAP / Consistency
-  - Observability
+
+### 12. CV-based Interview Prep
+- [CV-based Questions](interview/cv-based-questions.md)
+- [STAR Stories](interview/star.md)
+
+## Còn cần bổ sung
+- API Security: JWT, HMAC, OAuth, replay protection, secret rotation
+- API design: REST vs GraphQL, pagination, idempotency, N+1, versioning
+- Nest request lifecycle / DI / Guards / Pipes / Interceptors / Filters
+
+> Shopify và TimescaleDB được chủ động bỏ khỏi roadmap ôn tập.
 
 ## Cách học
 
