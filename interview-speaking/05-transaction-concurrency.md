@@ -1,180 +1,237 @@
 # 05 — Transaction & Database Concurrency
 
-> Mục tiêu của file này: không chỉ nhớ tên ACID/locking mà phải giải thích được bằng ngôn ngữ đơn giản khi interviewer hỏi ngược lại "ý em là gì?".
-
-# 1. Transaction là gì?
-
-## Bài nói đầy đủ
-
-> Theo cách em hiểu, transaction dùng khi nhiều thao tác database thuộc cùng một nghiệp vụ và em không muốn hệ thống chỉ làm thành công một nửa.
->
-> Ví dụ khi tạo order, hệ thống có thể phải tạo bản ghi `Order`, tạo các `LineItem`, rồi cập nhật một số dữ liệu liên quan. Nếu tạo Order thành công nhưng tạo LineItem thất bại, database sẽ có một order không đầy đủ.
->
-> Khi đặt các thao tác đó trong transaction, nếu tất cả thành công thì em `commit`, tức là xác nhận lưu toàn bộ thay đổi. Nếu một bước quan trọng thất bại thì em `rollback`, tức là hủy những thay đổi của transaction đó để database không bị rơi vào trạng thái làm dở.
->
-> Tuy nhiên transaction không nên mở quá lâu vì trong thời gian đó nó giữ database connection và có thể giữ lock. Vì vậy em cố giữ transaction ngắn và thường tránh gọi Shopify, Stripe hoặc external API trong lúc transaction đang mở.
-
-### Commit là gì?
-
-> Commit là thời điểm transaction xác nhận các thay đổi thành công. Sau commit, những thay đổi đó trở thành kết quả chính thức của transaction.
-
-### Rollback là gì?
-
-> Rollback là hủy các thay đổi chưa commit của transaction khi xảy ra lỗi hoặc khi mình chủ động quyết định không tiếp tục.
+Mục tiêu: hiểu transaction bằng **nghiệp vụ cụ thể**, không trả lời bằng một chuỗi ACID/locking khó nhớ.
 
 ---
 
-# 2. ACID — giải thích bằng ví dụ
+# 1. Transaction là gì?
 
-ACID là bốn đặc tính thường được dùng để mô tả transaction. Khi phỏng vấn không nên chỉ đọc bốn chữ; hãy giải thích từng chữ.
+## 💬 Bài nói
 
-## Atomicity — hoặc tất cả, hoặc không có gì
-
-> Ví dụ em cần tạo Order và 3 LineItem. Nếu tạo đến LineItem thứ hai thì lỗi, Atomicity giúp em không để lại một nửa dữ liệu của nghiệp vụ đó. Transaction có thể rollback để các thay đổi thuộc transaction không được commit.
-
-## Consistency — dữ liệu sau transaction vẫn đúng các rule
-
-> Em hiểu Consistency đơn giản là trước và sau transaction, dữ liệu phải tiếp tục thỏa những rule mà hệ thống/database yêu cầu.
+> Em dùng **transaction** khi nhiều thao tác database thuộc cùng một nghiệp vụ và em không muốn hệ thống chỉ làm thành công một nửa.
 >
-> Ví dụ `email` có unique constraint thì sau transaction không thể có hai record vi phạm constraint đó. Hoặc nếu hệ thống có rule số lượng tồn kho không được âm thì logic cập nhật phải bảo vệ rule đó.
+> Ví dụ khi tạo order, em có thể cần tạo `Order`, tạo các `LineItem` và cập nhật một số dữ liệu liên quan. Nếu tạo Order thành công nhưng tạo LineItem thất bại thì database bị trạng thái làm dở.
+>
+> Khi đặt các thao tác đó trong transaction, nếu tất cả thành công thì em **commit** — tức là xác nhận lưu thay đổi. Nếu một bước quan trọng thất bại thì em **rollback** — tức là hủy những thay đổi chưa commit của transaction đó.
+>
+> Em cũng cố giữ transaction ngắn vì trong thời gian transaction mở, nó giữ database connection và có thể giữ lock. Vì vậy em thường tránh gọi Stripe/Shopify trong lúc transaction đang mở.
 
-### "Valid state" nghĩa là gì?
+---
 
-> Nếu dùng từ valid state, em muốn nói một trạng thái dữ liệu vẫn thỏa các constraint và rule của hệ thống. Nhưng khi phỏng vấn em ưu tiên nói thẳng rule cụ thể thay vì chỉ nói "valid state".
+# 🧾 Thuật ngữ
 
-## Isolation — transaction chạy đồng thời ảnh hưởng nhau đến mức nào
+### **Transaction** *(nhóm thao tác database được xử lý như một đơn vị logic)*
 
-> Ví dụ hai request cùng sửa một sản phẩm. Isolation liên quan đến việc một transaction được nhìn thấy thay đổi của transaction khác ở thời điểm nào và database ngăn các transaction concurrent gây kết quả sai ra sao. Mức bảo vệ này phụ thuộc isolation level.
+### **Commit** *(xác nhận transaction thành công và lưu thay đổi)*
 
-## Durability — commit thành công thì dữ liệu phải được lưu bền vững
+### **Rollback** *(hủy thay đổi chưa commit của transaction)*
 
-> Sau khi database báo transaction commit thành công, hệ thống database phải đảm bảo dữ liệu tồn tại theo durability guarantee của nó, kể cả khi sau đó process application restart.
+### **Lock** *(cơ chế database kiểm soát các transaction cùng truy cập dữ liệu có xung đột)*
+
+---
+
+# 2. ACID — hiểu bằng ví dụ
+
+## **Atomicity** *(hoặc tất cả thành công, hoặc không để lại trạng thái nửa chừng)*
+
+📌 Tạo Order + 3 LineItem. Nếu LineItem thứ 2 fail thì transaction rollback thay vì để lại một order thiếu dữ liệu.
+
+## **Consistency** *(sau transaction, dữ liệu vẫn thỏa rule/constraint của hệ thống)*
+
+📌 Ví dụ `email` phải unique, foreign key phải hợp lệ, hoặc business rule không cho stock âm.
+
+⚠️ **Không nên chỉ nói:**
+
+> “Consistency là từ valid state sang valid state.”
+
+Vì interviewer rất dễ hỏi “valid state là gì?”.
+
+✅ **Cách nói tốt hơn:**
+
+> Em hiểu consistency là dữ liệu sau transaction vẫn phải thỏa các constraint và business rule. Ví dụ unique email vẫn được giữ hoặc tồn kho không bị âm.
+
+### **Valid state** *(trạng thái dữ liệu vẫn thỏa các rule đã định)*
+
+Nếu dùng từ này thì giải thích luôn, nhưng tốt nhất nói rule cụ thể.
+
+## **Isolation** *(transaction chạy đồng thời nhìn thấy và ảnh hưởng nhau ở mức nào)*
+
+📌 Hai request cùng sửa một product. Isolation level quyết định một transaction thấy thay đổi của transaction kia khi nào và database bảo vệ các trường hợp concurrent ra sao.
+
+## **Durability** *(database đã báo commit thành công thì dữ liệu phải được lưu bền vững theo guarantee của DB)*
+
+Không có nghĩa application process không bao giờ crash; nó nói về guarantee của database sau commit.
 
 ---
 
 # 3. Race Condition
 
-## Race condition là gì?
+## **Race condition** *(kết quả phụ thuộc vào thứ tự/thời điểm nhiều request chạy đồng thời)*
 
-> Race condition xảy ra khi kết quả phụ thuộc vào thứ tự hoặc thời điểm nhiều request/task chạy đồng thời. Mỗi request nhìn riêng có thể đúng, nhưng khi chúng xen kẽ nhau thì kết quả cuối có thể sai.
+## 📌 Ví dụ stock = 1
 
-## Ví dụ stock = 1
+```text
+Request A đọc stock = 1
+Request B đọc stock = 1
+A kiểm tra > 0 → cho mua
+B kiểm tra > 0 → cũng cho mua
+A update
+B update
+→ có thể oversell
+```
 
-> Giả sử stock hiện tại bằng 1. Request A đọc thấy 1. Gần như cùng lúc request B cũng đọc thấy 1. Cả hai đều kiểm tra `stock > 0` và đều cho phép mua. Sau đó cả hai cùng update.
+## 💬 Bài nói
+
+> Vấn đề là đoạn “đọc → kiểm tra → ghi” gồm nhiều bước riêng. `if (stock > 0)` trong Node.js không đủ bảo vệ vì request khác có thể thay đổi dữ liệu sau lúc mình đọc nhưng trước lúc mình ghi.
 >
-> Vấn đề ở đây là đoạn "đọc → kiểm tra → ghi" gồm nhiều bước riêng biệt. Việc `if (stock > 0)` trong Node.js không đủ bảo vệ vì một process/request khác có thể thay đổi dữ liệu giữa các bước.
+> Em cần đẩy phần correctness xuống database bằng một thao tác atomic, transaction + locking, hoặc optimistic concurrency tùy workload.
 
-## Có thể xử lý thế nào?
+### **Atomic operation** *(thao tác được thực hiện như một đơn vị không bị chen giữa ở điểm cần bảo vệ)*
 
-> Một cách là atomic update có condition, ví dụ chỉ decrement khi stock vẫn lớn hơn 0. Một cách khác là transaction kết hợp row lock. Ngoài ra có optimistic concurrency nếu conflict không thường xuyên.
->
-> Em chọn cách nào dựa vào mức độ conflict, yêu cầu correctness và database đang dùng, chứ không mặc định lock mọi thứ.
+Ví dụ:
+
+```sql
+UPDATE products
+SET stock = stock - 1
+WHERE id = ? AND stock > 0;
+```
+
+Câu query vừa kiểm tra điều kiện vừa update trong một database operation, an toàn hơn việc đọc stock ra Node rồi update sau.
 
 ---
 
-# 4. Optimistic và Pessimistic Locking
+# 4. Optimistic vs Pessimistic Locking
 
-## Optimistic locking là gì?
+## **Optimistic locking** *(giả định conflict hiếm, phát hiện conflict lúc update)*
 
-> Optimistic nghĩa là mình giả định phần lớn thời gian các request sẽ không conflict. Record có thể có `version` hoặc một giá trị dùng để kiểm tra. Khi update, mình chỉ update nếu version vẫn giống lúc đọc. Nếu người khác đã sửa trước thì update thất bại và mình có thể đọc lại/retry.
+📌 Record có `version = 5`.
 
-**Ví dụ:** A và B cùng đọc `version = 5`. A update thành công và tăng lên 6. B cố update với điều kiện `version = 5` thì không còn match, nên B biết dữ liệu đã thay đổi.
+- A và B cùng đọc version 5.
+- A update thành công và tăng version thành 6.
+- B update với điều kiện `version = 5` thì không match.
+- B biết dữ liệu đã bị thay đổi và có thể đọc lại/retry.
 
-## Pessimistic locking là gì?
+## **Pessimistic locking** *(lock dữ liệu trước vì giả định conflict có thể xảy ra và muốn transaction khác chờ)*
 
-> Pessimistic nghĩa là khi em chuẩn bị sửa dữ liệu, em lock record để transaction khác không thể thực hiện thao tác xung đột theo cách tương tự cho đến khi lock được giải phóng.
->
-> Cách này hữu ích khi conflict có khả năng cao hoặc nghiệp vụ cần serialize access, nhưng nếu giữ lock lâu thì request khác phải chờ và throughput có thể giảm.
+Ví dụ row lock khi một transaction đang xử lý stock nhạy cảm.
 
 ### Chọn cái nào?
 
-> Conflict ít thì optimistic thường giúp concurrency tốt hơn. Conflict cao hoặc nghiệp vụ rất nhạy cảm có thể cần pessimistic/row locking. Em vẫn phải xem cụ thể database và query pattern.
+> Nếu conflict ít, optimistic thường cho concurrency tốt hơn vì không giữ lock lâu. Nếu conflict cao hoặc nghiệp vụ rất nhạy cảm thì row locking có thể phù hợp hơn. Em chọn theo workload và database cụ thể.
+
+### **Conflict** *(hai transaction muốn thay đổi dữ liệu theo cách không thể cùng đúng)*
 
 ---
 
-# 5. Isolation Level và các lỗi thường gặp
+# 5. Isolation Level
 
-## Isolation level là gì?
+## **Isolation level** *(mức độ database tách các transaction chạy đồng thời khỏi nhau)*
 
-> Isolation level là mức độ database tách các transaction chạy đồng thời khỏi nhau. Mức isolation cao hơn thường ngăn được nhiều hiện tượng concurrency hơn, nhưng có thể đổi lại bằng nhiều waiting, locking hoặc chi phí xử lý hơn tùy database.
+Mức isolation cao hơn thường giảm một số anomaly nhưng có thể đổi lại bằng nhiều waiting/locking hơn tùy database.
 
-### Dirty read
+### **Dirty read** *(đọc dữ liệu transaction khác chưa commit)*
 
-> Transaction A sửa dữ liệu nhưng chưa commit. Transaction B đã đọc được giá trị chưa commit đó. Sau đó A rollback, nghĩa là B đã từng đọc một giá trị cuối cùng không tồn tại.
+A update giá trị nhưng chưa commit. B đọc được giá trị đó. Sau đó A rollback. B đã từng đọc một giá trị cuối cùng không tồn tại.
 
-### Non-repeatable read
+### **Non-repeatable read** *(đọc cùng một row hai lần trong transaction nhưng giá trị thay đổi vì transaction khác commit ở giữa)*
 
-> Trong cùng transaction, em đọc cùng một row hai lần nhưng nhận hai giá trị khác nhau vì transaction khác đã commit update ở giữa hai lần đọc.
+### **Phantom read** *(chạy cùng query điều kiện hai lần nhưng tập row thay đổi vì transaction khác insert/delete rồi commit)*
 
-### Phantom read
+⚠️ **Dễ bị bắt bẻ:**
 
-> Em chạy cùng một query theo điều kiện hai lần nhưng lần sau xuất hiện hoặc biến mất thêm row do transaction khác insert/delete và commit ở giữa.
+> “Isolation càng cao càng tốt.”
 
-### Có phải luôn chọn isolation cao nhất?
+✅ **Cách nói an toàn:**
 
-> Không. Em chọn theo yêu cầu nghiệp vụ và đặc tính database. Nếu tăng isolation không cần thiết thì có thể giảm concurrency hoặc tăng contention.
+> Isolation cao hơn bảo vệ nhiều hiện tượng concurrency hơn nhưng có thể giảm concurrency hoặc tăng waiting. Em chọn dựa vào yêu cầu correctness của nghiệp vụ.
 
 ---
 
 # 6. Deadlock
 
-## Deadlock là gì?
-
-> Deadlock là tình huống hai transaction chờ tài nguyên của nhau và không transaction nào tự đi tiếp được.
-
-**Ví dụ:**
+## **Deadlock** *(hai transaction giữ resource và chờ lẫn nhau nên không bên nào tự đi tiếp)*
 
 ```text
 Transaction A: lock Order 1 → chờ Order 2
 Transaction B: lock Order 2 → chờ Order 1
 ```
 
-> Database thường phát hiện vòng chờ này và abort một transaction để phá deadlock.
+Database thường phát hiện vòng chờ và abort một transaction.
 
-## Em giảm deadlock thế nào?
+## 💬 Cách giảm deadlock
 
-> Em giữ transaction ngắn, truy cập các resource theo cùng một thứ tự khi có thể, đảm bảo query/index hợp lý để tránh lock phạm vi không cần thiết, và xử lý retry khi database báo deadlock nếu operation đó an toàn để retry.
+> Em giữ transaction ngắn, truy cập resource theo thứ tự nhất quán khi có thể, tránh query scan/lock phạm vi quá lớn và xử lý retry nếu database abort transaction vì deadlock và operation an toàn để chạy lại.
 
----
-
-# 7. External API + Database Transaction
-
-### Tại sao không nên mở DB transaction rồi gọi Stripe/Shopify?
-
-> External API là network call nên latency khó đoán và có thể timeout. Nếu em mở transaction, giữ connection/lock rồi chờ Stripe vài giây thì database resource cũng bị giữ trong vài giây đó. Khi nhiều request cùng làm vậy, connection pool và lock contention có thể trở thành bottleneck.
-
-### Vậy workflow nhiều hệ thống xử lý thế nào?
-
-> Em thường chia workflow thành các bước có trạng thái rõ ràng. Local database transaction chỉ bảo vệ dữ liệu trong database của mình. Với external service, em dùng webhook, retry và idempotency để đồng bộ trạng thái. Với workflow phức tạp hơn có thể cân nhắc outbox/event hoặc compensation.
-
-### Idempotency là gì?
-
-> Idempotency nghĩa là cùng một operation bị gửi lại nhiều lần nhưng hệ thống không tạo ra kết quả phụ ngoài ý muốn nhiều lần. Ví dụ Stripe gửi lại cùng một webhook thì mình không tạo hai payment record cho cùng một event.
-
-### Compensation là gì?
-
-> Vì không thể rollback một external service bằng DB rollback, đôi khi mình cần một hành động nghiệp vụ để "bù" cho bước đã thành công. Ví dụ bước sau thất bại thì tạo một operation hoàn tiền/hủy tương ứng thay vì giả vờ rằng transaction database có thể rollback cả hệ thống bên ngoài.
+### **Abort transaction** *(database dừng transaction và rollback để phá tình trạng lỗi như deadlock)*
 
 ---
 
-# 8. Câu hỏi interviewer có thể đào
+# 7. Tại sao không gọi external API trong DB transaction?
+
+## 💬 Bài nói
+
+> Stripe hoặc Shopify là network call nên latency khó đoán và có thể timeout. Nếu em mở transaction rồi giữ connection/lock trong lúc chờ external API vài giây, database resource cũng bị giữ vài giây.
+>
+> Khi nhiều request cùng làm như vậy, connection pool có thể hết và lock contention tăng. Vì vậy local DB transaction chỉ nên bảo vệ phần dữ liệu trong database của mình. External workflow thường được chia thành các bước có state rõ ràng và xử lý retry/idempotency.
+
+### **State** *(trạng thái hiện tại của một workflow)*
+
+Ví dụ payment có thể là `pending`, `paid`, `failed`.
+
+### **Idempotency** *(chạy lại cùng operation nhưng không tạo kết quả sai hoặc nhân đôi)*
+
+📌 Stripe gửi lại cùng webhook hai lần nhưng hệ thống không tạo hai payment record.
+
+---
+
+# 8. Compensation
+
+## **Compensation** *(hành động nghiệp vụ để bù lại một bước đã thành công khi bước sau thất bại)*
+
+📌 Ví dụ:
+
+1. Đã charge payment thành công.
+2. Bước tạo order sau đó thất bại nghiêm trọng.
+3. Không thể dùng DB rollback để “xóa” payment ở Stripe.
+4. Có thể cần một hành động hoàn tiền hoặc hủy phù hợp.
+
+⚠️ Compensation không phải rollback kỹ thuật của distributed system; nó là hành động nghiệp vụ bù lại.
+
+---
+
+# 9. Câu hỏi đào sâu
 
 ### Tại sao `if` trong application không đủ chống race condition?
 
-> Vì check và update không nhất thiết là một thao tác atomic. Request khác có thể thay đổi dữ liệu giữa lúc mình đọc và lúc mình ghi.
+> Vì check và update là hai thời điểm khác nhau. Request khác có thể thay đổi dữ liệu ở giữa.
 
-### Atomic operation là gì?
+### Transaction có đảm bảo không bao giờ duplicate không?
 
-> Là operation được quan sát như một thao tác không bị chia nhỏ theo góc nhìn concurrency cần bảo vệ. Ví dụ một câu update có condition có thể vừa kiểm tra điều kiện vừa thay đổi giá trị trong một database operation, thay vì application đọc trước rồi update sau.
+> Không tự động. Transaction chỉ giúp bảo vệ các thao tác DB theo guarantee của database. Duplicate còn phụ thuộc constraint, idempotency/business key và flow cụ thể.
 
-### Lock là gì?
+### Unique constraint có giúp concurrency không?
 
-> Lock là cơ chế database dùng để kiểm soát nhiều transaction cùng truy cập resource có xung đột. Tùy loại lock, transaction khác có thể vẫn đọc được hoặc phải chờ khi muốn ghi.
+> Có thể. Ví dụ nếu chỉ được có một record cho một business key, unique constraint giúp database enforce rule ngay cả khi hai request cùng insert.
 
-### Connection pool là gì?
+### Connection pool liên quan transaction thế nào?
 
-> Application không mở một database connection mới cho từng query rồi đóng ngay. Nó thường giữ một nhóm connection để tái sử dụng. Nếu tất cả connection đang bận, query mới phải chờ; chờ quá lâu có thể timeout.
+> Mỗi transaction thường giữ một database connection trong thời gian transaction chạy. Transaction quá dài làm connection được trả về pool chậm hơn.
 
-## Cách nhớ bằng câu chuyện
+---
 
-`Nhiều bước của một nghiệp vụ → transaction → commit/rollback → nhiều request cùng sửa → race condition → atomic update/locking/version → giữ transaction ngắn → external API dùng state + retry + idempotency`
+# ⚠️ Những câu dễ bị hỏi mẹo
+
+❌ “Transaction đảm bảo consistency.”  
+✅ “Transaction kết hợp với constraint và logic giúp dữ liệu vẫn thỏa các rule; em sẽ nói rule cụ thể của nghiệp vụ.”
+
+❌ “Pessimistic locking luôn an toàn hơn.”  
+✅ “Nó serialize access mạnh hơn nhưng có thể tăng waiting/deadlock; em chọn theo conflict rate.”
+
+❌ “Serializable là tốt nhất.”  
+✅ “Serializable bảo vệ mạnh nhưng cost cao hơn; không phải mọi nghiệp vụ đều cần.”
+
+---
+
+# 📌 Cách nhớ
+
+**Nhiều bước của một nghiệp vụ → transaction → commit/rollback → nhiều request cùng sửa → race condition → atomic update/locking/version → transaction ngắn → external API dùng state + retry + idempotency**
