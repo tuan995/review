@@ -1,69 +1,216 @@
 # 07 — API Integration & Rate Limit
 
-# Case: Shopify / Google / Third-party API
-
-## Bài nói
-
-> Khi tích hợp API bên ngoài, em luôn để ý giới hạn số request mà provider cho phép trong một khoảng thời gian. Nếu mỗi request của user lại gọi thẳng external API hoặc một background job cùng lúc xử lý quá nhiều item thì hệ thống rất dễ chạm giới hạn đó.
->
-> Em thường xử lý theo nhiều lớp. Đầu tiên là giảm những request không cần thiết bằng database local hoặc cache. Sau đó em giới hạn số task đang chạy cùng lúc hoặc số request gửi đi trong một khoảng thời gian.
->
-> Nếu provider trả `429 Too Many Requests`, em không retry ngay liên tục. Nếu API trả `Retry-After` hoặc thông tin tương tự thì em ưu tiên làm theo. Nếu không có, em chờ một khoảng rồi mới thử lại và khoảng chờ có thể tăng dần ở các lần retry tiếp theo.
->
-> Với job không cần kết quả ngay, em có thể dùng queue để trải workload ra theo thời gian thay vì dồn toàn bộ request vào một lúc.
-
-### Rate limit là gì?
-
-> Rate limit là giới hạn số request được phép gửi trong một khoảng thời gian, ví dụ một số lượng request mỗi giây/phút hoặc theo cơ chế quota riêng của provider.
-
-### Concurrency limit khác rate limit thế nào?
-
-> Concurrency limit giới hạn **bao nhiêu operation đang chạy cùng lúc**. Rate limit giới hạn **bao nhiêu operation được gửi trong một khoảng thời gian**.
->
-> Ví dụ em có thể chỉ cho 5 request chạy cùng lúc nhưng nếu mỗi request hoàn thành rất nhanh thì tổng số request/phút vẫn có thể lớn. Vì vậy có hệ thống cần cả hai loại giới hạn.
-
-### 429 xử lý sao?
-
-> Em đọc thông tin retry mà provider trả về nếu có. Sau đó retry có giới hạn và chờ giữa các lần retry. Em cũng xem có cần giảm tốc độ worker hoặc giảm lượng request phát sinh từ đầu hay không.
-
-### Backoff là gì?
-
-> Là thay vì lỗi xong thử lại ngay, em chờ một khoảng rồi mới retry. Các lần sau có thể chờ lâu hơn để tránh tiếp tục gây tải lên service đang bận.
-
-### Jitter là gì?
-
-> Nếu nhiều worker đều lỗi cùng lúc và đều chờ đúng 2 giây rồi retry thì 2 giây sau chúng lại cùng dồn request lên provider. Jitter là thêm một khoảng ngẫu nhiên nhỏ vào thời gian chờ để các worker retry lệch nhau.
-
-### “Thundering herd” là gì?
-
-> Đây là tên gọi cho tình huống rất nhiều worker/request cùng thức dậy hoặc retry gần như cùng lúc, tạo một đợt tải lớn. Khi nói phỏng vấn em có thể tránh từ này và nói thẳng “nhiều worker retry cùng thời điểm”.
-
-### Retry mọi lỗi không?
-
-> Không. Timeout, 429 hoặc một số 5xx có thể là lỗi tạm thời nên retry có thể hợp lý. Nhưng lỗi input sai hoặc authentication sai thì retry y nguyên nhiều lần thường không giúp gì.
-
-### “Transient error” là gì?
-
-> Là lỗi có khả năng chỉ xảy ra tạm thời, ví dụ network timeout hoặc server bên ngoài đang quá tải. Thử lại sau có thể thành công.
-
-### “Bounded retry” là gì?
-
-> Là retry có giới hạn số lần hoặc giới hạn thời gian. Em tránh retry vô hạn vì nó có thể biến một lỗi bên ngoài thành workload lớn hơn cho chính hệ thống của mình.
-
-### Cache có giải quyết rate limit hoàn toàn không?
-
-> Không. Cache chủ yếu giúp giảm những request đọc lặp lại. Dữ liệu cache cũng có thể cũ và cần cơ chế cập nhật/xóa. Những operation ghi hoặc đồng bộ vẫn cần kiểm soát tốc độ.
+Mục tiêu: giải thích rate limit bằng **flow request thực tế**, không chỉ nói “retry + backoff”.
 
 ---
 
-# Bài nói 60 giây
+# 1. Rate limit là gì?
 
-> Khi làm với Shopify hoặc API bên thứ ba, em không giả định mình có thể gọi API không giới hạn. Em giảm request không cần thiết bằng local DB/cache, giới hạn số task chạy cùng lúc và với job lớn thì đưa qua queue để điều tiết tốc độ.
+## **Rate limit** *(giới hạn số request được phép trong một khoảng thời gian hoặc theo một cơ chế quota cụ thể)*
+
+Ví dụ provider có thể giới hạn số request/giây, request/phút hoặc dùng cost/token bucket tùy API.
+
+## 💬 Bài nói
+
+> Khi tích hợp Shopify, Google hoặc API bên thứ ba, em luôn tính tới việc provider không cho mình gọi vô hạn. Nếu mỗi request user đều gọi trực tiếp external API, hoặc một background job cùng lúc xử lý hàng trăm item, mình có thể vượt giới hạn và nhận lỗi 429 hoặc bị throttle.
 >
-> Khi gặp 429, em ưu tiên đọc `Retry-After` hoặc metadata của provider. Nếu cần retry thì em chờ giữa các lần và có giới hạn số lần thử. Em cũng tránh để nhiều worker retry đúng cùng thời điểm bằng cách thêm một khoảng ngẫu nhiên nhỏ vào thời gian chờ.
+> Em xử lý theo nhiều lớp. Đầu tiên là giảm request không cần thiết bằng local database/cache. Sau đó em giới hạn số request hoặc số task đang chạy. Nếu provider trả rate-limit response thì em đọc metadata/`Retry-After` nếu có và retry sau một khoảng phù hợp thay vì gọi lại ngay.
 >
-> Quan trọng là không chỉ xử lý 429 sau khi nó xảy ra mà phải thiết kế để request rate ổn định ngay từ đầu.
+> Với job không cần realtime, queue cũng giúp trải workload theo thời gian thay vì dồn request trong một burst.
 
-## Cách nhớ
+---
 
-`Giảm request → giới hạn số task/tốc độ → 429 thì chờ → retry có giới hạn → không retry tất cả lỗi`
+# 🧾 Thuật ngữ
+
+### **Quota** *(hạn mức provider cấp cho client/application)*
+
+### **Throttle** *(provider chủ động làm chậm hoặc từ chối request khi vượt giới hạn)*
+
+### **429 Too Many Requests** *(HTTP status thường dùng khi client gửi quá nhiều request)*
+
+### **Retry-After** *(header/metadata cho biết nên chờ bao lâu trước khi thử lại, nếu provider cung cấp)*
+
+### **Burst** *(nhiều request dồn vào một khoảng thời gian rất ngắn)*
+
+---
+
+# 2. Rate limit vs Concurrency limit
+
+## **Concurrency limit** *(giới hạn số operation đang active cùng lúc)*
+
+## **Rate limit** *(giới hạn số operation trong một khoảng thời gian)*
+
+📌 Ví dụ:
+
+- Concurrency = 5: tối đa 5 request đang chờ response cùng lúc.
+- Rate = 10 req/s: trong một giây không gửi quá 10 request.
+
+Một hệ thống có thể cần cả hai.
+
+⚠️ **Dễ bị nhầm:** concurrency = 5 không đảm bảo rate <= 10 req/s nếu mỗi request hoàn thành cực nhanh.
+
+---
+
+# 3. Retry thế nào?
+
+## 💬 Bài nói
+
+> Em không retry ngay lập tức và cũng không retry vô hạn. Nếu provider trả `Retry-After` thì ưu tiên tôn trọng thông tin đó. Nếu không có, em có thể dùng backoff — tức là mỗi lần thất bại thì chờ trước khi thử lại.
+
+### **Exponential backoff** *(thời gian chờ tăng dần sau mỗi lần retry)*
+
+Ví dụ:
+
+```text
+Lần 1 fail → chờ ~1s
+Lần 2 fail → chờ ~2s
+Lần 3 fail → chờ ~4s
+```
+
+### **Jitter** *(thêm một khoảng ngẫu nhiên nhỏ vào thời gian chờ)*
+
+Nếu 100 worker cùng nhận 429 và tất cả cùng chờ chính xác 2 giây, sau 2 giây chúng lại cùng gửi request → tạo burst mới.
+
+Jitter làm thời điểm retry phân tán hơn.
+
+### **Bounded retry** *(retry có số lần/thời gian giới hạn)*
+
+Không nên retry vô hạn vì có thể làm queue tăng mãi hoặc che giấu lỗi permanent.
+
+---
+
+# 4. Lỗi nào nên retry?
+
+## Có khả năng retry
+
+- timeout;
+- một số network error;
+- 429;
+- nhiều trường hợp 5xx.
+
+Đây thường là **transient errors** *(lỗi có khả năng chỉ xảy ra tạm thời)*.
+
+## Thường không retry mù
+
+- 400 vì payload invalid;
+- authentication/authorization sai;
+- resource không hợp lệ theo business rule.
+
+Đây có thể là **permanent error** *(gửi lại cùng request cũng không tự hết)*.
+
+⚠️ Không nên học status code thành bảng tuyệt đối; luôn xem semantics của API cụ thể.
+
+---
+
+# 5. Tại sao dùng local database/cache?
+
+## 📌 Ví dụ
+
+Frontend cần hiển thị product title 1.000 lần/ngày.
+
+Nếu mỗi lần đều gọi Shopify thì:
+
+- tăng latency;
+- dùng quota;
+- phụ thuộc availability của Shopify.
+
+Nếu dữ liệu phù hợp để lưu local, application có thể đọc database/cache và chỉ sync khi cần.
+
+### **Cache** *(bản dữ liệu tạm giúp giảm số lần đọc nguồn chậm hơn)*
+
+⚠️ Cache không giải quyết rate limit hoàn toàn. Write/sync vẫn cần limiter và cache tạo thêm bài toán freshness/invalidation.
+
+---
+
+# 6. Queue giúp gì?
+
+## **Queue** *(hàng đợi lưu các task để worker lấy xử lý dần)*
+
+Ví dụ cần sync 10.000 products nhưng không cần hoàn thành trong một HTTP request.
+
+```text
+10.000 jobs
+    ↓
+Queue
+    ↓
+Worker lấy từng job với rate/concurrency control
+    ↓
+Shopify API
+```
+
+Queue giúp:
+
+- tránh burst;
+- retry độc lập;
+- kiểm soát số worker;
+- recover tốt hơn nếu process restart.
+
+---
+
+# 7. Idempotency khi retry
+
+## **Idempotency** *(cùng một operation chạy lại nhưng không tạo kết quả sai hoặc nhân đôi)*
+
+📌 Nếu retry `GET`, thường ít nguy hiểm hơn. Nhưng retry `POST create payment` có thể tạo hai payment nếu request đầu đã thành công nhưng response bị mất.
+
+## 💬 Cách nói
+
+> Với operation có side effect, em chỉ retry khi có cơ chế nhận biết request lặp, ví dụ idempotency key hoặc business key/unique constraint tùy hệ thống.
+
+### **Side effect** *(operation làm thay đổi trạng thái bên ngoài, ví dụ tạo order/charge tiền)*
+
+---
+
+# 8. Monitoring rate limit
+
+Chỉ retry là chưa đủ. Em muốn biết:
+
+- request rate;
+- số response 429;
+- retry count;
+- latency;
+- error rate;
+- queue depth nếu dùng queue.
+
+### **Metrics** *(số liệu đo theo thời gian để biết hệ thống đang hoạt động thế nào)*
+
+---
+
+# 🎯 Interviewer hỏi tiếp
+
+### Tại sao không chỉ sleep 1 giây giữa mọi request?
+
+> Cách đó đơn giản nhưng có thể quá chậm hoặc vẫn không đúng policy của provider. Em ưu tiên limiter theo rate-limit model thực tế và metadata provider trả về.
+
+### Nếu nhiều shop có rate limit riêng thì sao?
+
+> Em có thể cần limiter theo từng shop/token thay vì một global limiter, tùy API policy. Quan trọng là giới hạn phải map đúng với resource/provider đang giới hạn.
+
+### Nếu queue backlog tăng liên tục?
+
+> Có thể worker xử lý chậm hơn tốc độ job được tạo. Em xem throughput, rate limit, lỗi retry, số worker và downstream capacity trước khi chỉ tăng worker.
+
+### Circuit breaker có liên quan không?
+
+> Có thể dùng khi external service lỗi liên tục để tạm ngừng gửi request thay vì tiếp tục gây tải. Nhưng em chỉ thêm khi hệ thống thực sự cần; không phải mọi integration đều cần circuit breaker.
+
+### **Circuit breaker** *(tạm dừng gọi dependency khi lỗi liên tục, rồi thử lại sau)*
+
+---
+
+# ⚠️ Những câu dễ bị bắt bẻ
+
+❌ “429 thì retry 3 lần.”  
+✅ “Em đọc policy/Retry-After của provider và retry có giới hạn; số lần phụ thuộc use case.”
+
+❌ “Cache sẽ tránh rate limit.”  
+✅ “Cache giảm một phần read calls; write/sync và cache miss vẫn cần kiểm soát.”
+
+❌ “Concurrency limit và rate limit giống nhau.”  
+✅ “Một cái giới hạn số task active, một cái giới hạn số request theo thời gian.”
+
+---
+
+# 📌 Cách nhớ
+
+**Giảm request → giới hạn concurrency/rate → queue nếu cần → gặp 429 → chờ/backoff+jitter → retry có giới hạn → đo metrics**
