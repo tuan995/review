@@ -1,118 +1,155 @@
 # 03 — Node.js & Event Loop
 
-> Mục tiêu: có thể nói thành câu chuyện và tự giải thích được từng thuật ngữ nếu interviewer dừng lại hỏi "cái đó là gì?".
+Mục tiêu: **nói thành câu chuyện**, không đọc thuộc một chuỗi keyword. Thuật ngữ quan trọng vẫn giữ lại nhưng giải thích ngay khi xuất hiện.
+
+---
 
 # 1. Node.js là gì?
 
-## Bài nói
+## 💬 Bài nói
 
-> Node.js là môi trường giúp em chạy JavaScript bên ngoài browser, thường dùng để xây backend/API. Bên dưới Node.js sử dụng V8 để thực thi JavaScript và libuv để hỗ trợ nhiều phần liên quan tới asynchronous I/O và Event Loop.
+> Node.js là môi trường giúp em chạy JavaScript bên ngoài browser, thường dùng để xây backend/API. Bên dưới Node dùng **V8** *(JavaScript engine thực thi code JavaScript)* và **libuv** *(thư viện hỗ trợ Event Loop và nhiều cơ chế I/O bất đồng bộ)*.
 >
-> Điểm mạnh của Node.js là xử lý các hệ thống có nhiều thao tác phải chờ như gọi database, gọi API hoặc network I/O. Thay vì đứng chờ một request I/O hoàn thành rồi mới làm request tiếp theo, Node có thể đăng ký công việc bất đồng bộ và tiếp tục xử lý việc khác.
+> Điểm mạnh của Node.js là xử lý tốt những hệ thống có nhiều thời gian chờ I/O, ví dụ chờ database, chờ Shopify API hoặc network response. Trong lúc một operation đang chờ I/O, main JavaScript thread không nhất thiết phải đứng yên chỉ để đợi kết quả đó.
 >
-> JavaScript application chủ yếu chạy trên một main thread. Tuy nhiên "Node.js single-threaded" không có nghĩa toàn bộ Node chỉ có đúng một thread. Runtime còn có OS asynchronous mechanisms và libuv worker pool cho một số loại công việc.
+> JavaScript application chủ yếu chạy trên một main thread. Nhưng nói “Node.js single-threaded” không có nghĩa toàn bộ runtime chỉ có đúng một thread. Node còn dùng cơ chế asynchronous I/O của hệ điều hành và libuv worker pool cho một số operation.
 >
-> Điểm cần cẩn thận là nếu em chạy JavaScript tính toán CPU quá lâu trên main thread, những callback/request khác không có cơ hội chạy kịp và server có thể phản hồi chậm.
+> Điểm cần chú ý là nếu có đoạn JavaScript tính toán CPU quá lâu trên main thread thì những callback/request khác phải chờ và server có thể phản hồi chậm.
 
-### Runtime là gì?
+## 🧾 Thuật ngữ
 
-> Runtime có thể hiểu là môi trường cung cấp những thứ cần thiết để code JavaScript thực thi. Browser là một JavaScript runtime; Node.js cũng là một runtime nhưng cung cấp API phù hợp phía server như filesystem, network, process...
+### **Runtime** *(môi trường cung cấp những thứ cần thiết để code chạy)*
 
-### V8 là gì?
+Browser là một JavaScript runtime. Node.js cũng là runtime nhưng có API phía server như filesystem, network, process...
 
-> V8 là JavaScript engine thực thi JavaScript. Node.js dùng V8 nhưng Node.js không chỉ có V8; Node còn có các API và thành phần như libuv để làm việc với I/O và Event Loop.
+### **V8** *(JavaScript engine)*
 
-### I/O-bound là gì?
+V8 chịu trách nhiệm parse/compile/execute JavaScript. Node.js dùng V8 nhưng Node không chỉ có V8.
 
-> I/O-bound nghĩa là phần lớn thời gian của task nằm ở việc chờ input/output thay vì CPU tính toán. Ví dụ chờ PostgreSQL trả query, chờ Shopify API response hoặc chờ đọc file.
+### **I/O** *(Input/Output — thao tác đọc/ghi hoặc giao tiếp với hệ thống bên ngoài CPU)*
 
-### CPU-bound là gì?
+Ví dụ đọc file, query database, gọi API, network socket.
 
-> CPU-bound là task tốn phần lớn thời gian để CPU tính toán, ví dụ vòng lặp tính toán rất lớn, encode/compress nặng hoặc xử lý ảnh. Nếu chạy synchronous trên main JS thread thì nó có thể block Event Loop.
+### **I/O-bound** *(task dành phần lớn thời gian để chờ I/O)*
+
+Ví dụ API gọi PostgreSQL rồi chờ query trả kết quả.
+
+### **CPU-bound** *(task dành phần lớn thời gian để CPU tính toán)*
+
+Ví dụ vòng lặp tính toán rất lớn, xử lý ảnh, encode/compress nặng.
 
 ---
 
 # 2. Synchronous và Asynchronous
 
-### Synchronous là gì?
+## **Synchronous** *(đồng bộ — operation hiện tại hoàn thành rồi code mới đi tiếp)*
 
-> Code synchronous chạy theo thứ tự và operation hiện tại phải hoàn thành trước khi JavaScript tiếp tục dòng tiếp theo.
+```js
+const data = readFileSync('large.txt');
+console.log(data.length);
+```
 
-### Asynchronous là gì?
+Trong thời gian `readFileSync` chạy, JavaScript thread bị giữ ở đó.
 
-> Với asynchronous operation, application có thể bắt đầu một công việc cần chờ, sau đó không nhất thiết phải giữ main JavaScript thread đứng yên chờ kết quả. Khi kết quả sẵn sàng, phần code tiếp theo được schedule để chạy sau.
+## **Asynchronous** *(bất đồng bộ — bắt đầu operation rồi có thể tiếp tục xử lý việc khác trong thời gian chờ)*
 
-> Asynchronous không đồng nghĩa với "tạo thread mới" và cũng không đồng nghĩa mọi thứ thực sự chạy parallel.
+```js
+const data = await fs.promises.readFile('large.txt');
+```
+
+Khi Promise đang chờ I/O, main thread không phải bận chỉ để ngồi chờ file.
+
+⚠️ **Dễ bị bắt bẻ:**
+
+> “Async nghĩa là chạy trên thread khác.”
+
+Câu này sai trong nhiều trường hợp.
+
+✅ **Cách nói an toàn:**
+
+> Asynchronous nghĩa là flow không cần block JavaScript thread trong thời gian chờ operation. Cách operation được thực hiện bên dưới có thể là OS async mechanism hoặc worker pool tùy loại công việc.
 
 ---
 
 # 3. Event Loop
 
-## Bài nói từ đầu đến cuối
+## 💬 Bài nói 60–90 giây
 
-> Em hình dung Event Loop là cơ chế giúp Node quyết định khi nào các callback bất đồng bộ có thể quay lại chạy trên JavaScript thread.
+> Em hình dung **Event Loop** là cơ chế giúp Node điều phối khi nào những callback hoặc phần code bất đồng bộ đã sẵn sàng được chạy lại trên JavaScript thread.
 >
-> Ví dụ request của em cần query database. Node gửi network request tới database. Trong thời gian chờ database trả lời, main JavaScript thread không cần ngồi chờ riêng query đó mà có thể xử lý công việc khác.
+> Ví dụ request cần query database. Node gửi network request tới database. Trong thời gian database đang xử lý, JavaScript thread có thể tiếp tục phục vụ công việc khác.
 >
-> Khi I/O có kết quả, runtime nhận được sự kiện hoàn thành. Callback hoặc continuation tương ứng sẽ có cơ hội được Event Loop xử lý khi JavaScript thread sẵn sàng.
+> Khi database trả kết quả, runtime nhận được event hoàn thành. Phần code xử lý kết quả sẽ được schedule để chạy khi tới lượt và khi JavaScript thread sẵn sàng.
 >
-> Vì vậy Node có thể phục vụ nhiều I/O operation concurrent dù JavaScript application chủ yếu chạy trên một main thread.
+> Nhờ mô hình này, Node có thể quản lý nhiều I/O operation cùng lúc dù JavaScript application chủ yếu chạy trên một main thread.
+
+## 📌 Sơ đồ
 
 ```text
-Request A → query DB ───────────────┐
-                                   │ DB đang xử lý
-Main JS thread → xử lý việc khác   │
-                                   ↓
-                              DB trả kết quả
-                                   ↓
-                         Event Loop / scheduling
-                                   ↓
-                       JS xử lý phần tiếp theo
+Request A
+   ↓
+Query database ────────────────┐
+                               │ DB đang xử lý
+Main JS thread làm việc khác   │
+                               ↓
+                         DB trả kết quả
+                               ↓
+                     Event Loop / scheduling
+                               ↓
+                    JS xử lý kết quả
 ```
 
-### Callback là gì?
+## 🧾 Thuật ngữ
 
-> Callback là function được truyền/đăng ký để chạy khi một công việc hoặc sự kiện đến thời điểm xử lý. Ví dụ sau khi I/O hoàn thành, callback có thể được gọi để xử lý kết quả.
+### **Callback** *(function được đăng ký để chạy khi một công việc/sự kiện tới lúc xử lý)*
 
-### Queue là gì trong ngữ cảnh này?
+### **Scheduling** *(quyết định khi nào công việc đã sẵn sàng được đưa tới lượt chạy)*
 
-> Có thể hiểu đơn giản queue là nơi các công việc đã sẵn sàng chờ tới lượt được xử lý. Node thực tế có nhiều queue/cơ chế scheduling khác nhau, nên khi phỏng vấn em không nói rằng tất cả callback đều nằm trong một queue duy nhất.
+### **Queue** *(nơi/cơ chế các công việc sẵn sàng chờ được xử lý)*
+
+Node có nhiều queue/cơ chế scheduling khác nhau, không phải mọi callback đều nằm trong một queue duy nhất.
 
 ---
 
 # 4. Event Loop phases
 
-> Nếu interviewer hỏi sâu, em biết Event Loop của Node/libuv đi qua các phase. Những phase em thường nhớ là timers, pending callbacks, poll, check và close callbacks.
+Nếu interviewer hỏi sâu, có thể nói:
 
-### Timers
+> Event Loop của Node/libuv có nhiều phase. Những phase em thường nhớ và giải thích được là **timers**, **poll**, **check** và **close callbacks**. Em ưu tiên hiểu mỗi phase làm gì hơn là đọc thuộc tên.
 
-> Đây là nơi xử lý callback của timer khi timer đã đạt ngưỡng thời gian phù hợp. `setTimeout(fn, 1000)` có nghĩa callback không được chạy trước khoảng delay đó; không đảm bảo đúng chính xác 1000 ms vì lúc đó main thread có thể đang bận.
+### **Timers**
 
-### Poll
+Xử lý callback của timer khi timer đã đạt điều kiện thời gian.
 
-> Poll là phase quan trọng liên quan tới việc nhận/xử lý các I/O events sẵn sàng. Khi nói đơn giản, em nhớ đây là phần Event Loop dành nhiều thời gian để xử lý I/O callbacks/events.
+`setTimeout(fn, 1000)` không có nghĩa callback chắc chắn chạy đúng 1000ms. Nó chỉ không chạy trước delay tối thiểu; lúc đó main thread có thể vẫn đang bận.
 
-### Check
+### **Poll**
 
-> `setImmediate()` callback được xử lý ở check phase.
+Có thể hiểu đơn giản là phase quan trọng liên quan tới nhận và xử lý I/O events/callbacks đã sẵn sàng.
 
-### Close callbacks
+### **Check**
 
-> Liên quan tới một số callback đóng resource, ví dụ close event của socket/handle.
+`setImmediate()` callback được xử lý ở check phase.
 
-### Có cần thuộc mọi phase không?
+### **Close callbacks**
 
-> Em ưu tiên hiểu flow và các case thực tế hơn là chỉ đọc tên phase. Nếu cần nhớ nhanh: timer → I/O/poll → check, nhưng đây chỉ là mental model rút gọn chứ không phải toàn bộ implementation.
+Liên quan tới một số callback khi resource/socket/handle được đóng.
+
+⚠️ **Dễ bị bắt bẻ:**
+
+> “Event Loop chỉ có timers → poll → check.”
+
+✅ **Cách nói an toàn:**
+
+> Đó là mental model rút gọn em dùng để nhớ. Thực tế Event Loop có thêm các phase/cơ chế khác.
 
 ---
 
-# 5. Microtask, Promise và `process.nextTick`
+# 5. Promise, Microtask và `process.nextTick`
 
-## Microtask là gì?
+## **Microtask** *(nhóm công việc có ưu tiên scheduling cao hơn nhiều callback thông thường)*
 
-> Microtask là nhóm công việc có mức ưu tiên scheduling khác callback thông thường. Promise continuation như `.then()`/phần sau `await` sử dụng microtask mechanism. Sau khi JavaScript hiện tại hoàn thành, microtasks được xử lý tại các điểm thích hợp trước khi Event Loop tiếp tục sang nhiều callback thông thường khác.
-
-Ví dụ:
+Promise `.then()` và phần tiếp tục sau `await` dùng cơ chế microtask.
 
 ```js
 console.log('A');
@@ -123,7 +160,7 @@ Promise.resolve().then(() => console.log('promise'));
 console.log('B');
 ```
 
-Kết quả cơ bản cần nhớ:
+Kết quả cơ bản:
 
 ```text
 A
@@ -132,204 +169,246 @@ promise
 timeout
 ```
 
-> `A` và `B` là synchronous. Promise continuation là microtask nên được xử lý trước timer callback trong ví dụ này.
+Vì code synchronous chạy trước, sau đó Promise microtask được xử lý trước timer callback trong ví dụ này.
 
 ### `process.nextTick()` là gì?
 
-> Đây là API riêng của Node để schedule callback chạy rất sớm sau operation hiện tại. Node xử lý nextTick queue với độ ưu tiên cao hơn Promise microtask queue tại các điểm nó drain hai queue này.
+Đây là API riêng của Node để schedule callback chạy rất sớm sau operation hiện tại. Node xử lý nextTick queue với độ ưu tiên cao.
 
-### Starvation là gì?
+### **Starvation** *(một nhóm task cứ được ưu tiên liên tục khiến nhóm khác không có cơ hội chạy)*
 
-> Starvation nghĩa là một nhóm công việc cứ được ưu tiên liên tục khiến nhóm khác không có cơ hội chạy. Nếu code liên tục schedule thêm `process.nextTick`, Event Loop có thể cứ xử lý nextTick và trì hoãn I/O.
+Nếu code liên tục tạo thêm `process.nextTick`, I/O có thể bị trì hoãn.
+
+⚠️ **Dễ bị bắt bẻ:**
+
+> “Promise luôn chạy trước mọi thứ.”
+
+✅ **Cách nói an toàn:**
+
+> Promise continuation dùng microtask queue và thường được xử lý trước nhiều callback event-loop thông thường sau khi current JavaScript hoàn thành. Nhưng em không dùng từ “luôn” cho mọi context.
 
 ---
 
-# 6. `setTimeout(0)` và `setImmediate()`
+# 6. `setTimeout(0)` vs `setImmediate()`
 
-> `setTimeout(fn, 0)` không có nghĩa "chạy ngay". Nó đăng ký timer với delay tối thiểu và callback chỉ chạy khi đến lượt timer processing.
->
-> `setImmediate()` được schedule cho check phase.
->
-> Em không nói `setImmediate` luôn trước hoặc timer luôn trước trong mọi trường hợp, vì thứ tự phụ thuộc context và trạng thái Event Loop. Khi schedule từ một I/O callback, `setImmediate` thường có behavior dễ dự đoán hơn theo flow poll → check.
+## 💬 Cách nói
+
+> `setTimeout(fn, 0)` không có nghĩa chạy ngay. Nó đăng ký timer với delay tối thiểu. `setImmediate()` được xử lý ở check phase. Em không nói một cái luôn chạy trước cái kia trong mọi trường hợp vì thứ tự còn phụ thuộc context và trạng thái Event Loop.
+
+📌 Khi schedule từ một I/O callback, `setImmediate()` thường có flow dễ dự đoán hơn theo poll → check.
 
 ---
 
 # 7. libuv và Worker Pool
 
-## libuv là gì?
+## **libuv** *(thư viện Node dùng cho Event Loop, abstraction I/O và worker pool)*
 
-> libuv là thư viện mà Node dùng cho Event Loop và abstraction asynchronous I/O trên nhiều hệ điều hành. Nó giúp Node làm việc với những cơ chế I/O khác nhau của OS theo một interface thống nhất và cũng cung cấp worker thread pool.
+Node chạy trên nhiều OS khác nhau. libuv giúp cung cấp interface tương đối thống nhất cho những cơ chế I/O đó.
 
-## Worker pool là gì?
+## **Worker pool** *(một nhóm worker threads được runtime giữ sẵn để xử lý một số operation)*
 
-> Đây là một nhóm worker threads được runtime duy trì để xử lý một số operation không chạy theo cơ chế non-blocking event notification thông thường. Không phải mỗi async operation tạo một thread mới.
+Không phải mỗi async operation tạo một thread mới.
 
-### Những gì có thể dùng libuv thread pool?
+Những operation thường được nhắc tới khi nói về libuv worker pool gồm:
 
-> Nhiều filesystem APIs, `dns.lookup`, một số crypto và zlib operations là những ví dụ thường gặp.
+- nhiều filesystem APIs;
+- `dns.lookup`;
+- một số crypto operations;
+- zlib/compression operations.
 
-### Network request có phải mỗi request chiếm một thread pool thread?
+### Network request có dùng một worker thread cho mỗi request không?
 
-> Không. Network socket I/O thường dựa vào asynchronous I/O/event notification của operating system. Đây là lý do không nên mô tả Node là "mỗi async task chạy trên thread pool".
+> Không. Network socket I/O thường dựa vào asynchronous event notification của operating system, chứ không phải một request tương ứng một thread trong libuv pool.
 
-### Default thread pool size?
+### Default worker pool size?
 
-> Thường mặc định là 4 và có thể cấu hình `UV_THREADPOOL_SIZE`. Nhưng tăng số thread không phải thuốc chữa mọi performance problem vì còn phụ thuộc CPU, loại workload và contention.
+> Thông thường mặc định là 4 và có thể điều chỉnh bằng `UV_THREADPOOL_SIZE`. Nhưng tăng thread không tự động làm mọi workload nhanh hơn.
 
-### Contention là gì?
+### **Contention** *(nhiều task cùng tranh một resource giới hạn)*
 
-> Contention là nhiều task cùng tranh một resource giới hạn, ví dụ CPU, database connection hoặc lock. Tăng concurrency quá cao có thể làm contention tăng và hệ thống chậm hơn thay vì nhanh hơn.
+Ví dụ nhiều task tranh CPU, database connection hoặc lock. Concurrency quá cao đôi khi làm hệ thống chậm hơn.
 
 ---
 
 # 8. `async/await`
 
-## Bài nói
+## 💬 Bài nói
 
-> `async/await` là cách viết code dựa trên Promise để flow bất đồng bộ dễ đọc hơn. Khi em `await` một Promise đang pending, function hiện tại tạm dừng ở đó; main thread không phải đứng yên chỉ để chờ Promise đó.
+> `async/await` là cách viết code dựa trên Promise giúp flow bất đồng bộ dễ đọc hơn. Khi em `await` một Promise đang chờ, function hiện tại tạm dừng ở vị trí đó nhưng main JavaScript thread không phải đứng yên chỉ để chờ Promise.
 >
-> Khi Promise hoàn thành, phần code sau `await` được schedule để tiếp tục chạy thông qua Promise/microtask mechanism.
+> Khi Promise hoàn thành, phần code sau `await` được schedule để tiếp tục chạy.
 >
-> Nhưng `async/await` không tự tạo thread và không biến CPU-heavy synchronous code thành non-blocking.
+> Nhưng `async/await` không tự tạo thread và cũng không biến một vòng lặp CPU-heavy thành non-blocking.
 
-### Pending và settled Promise là gì?
+### **Pending Promise** *(Promise chưa có kết quả cuối)*
 
-> Pending nghĩa là Promise chưa có kết quả cuối. Settled nghĩa là nó đã resolve/fulfilled hoặc reject.
+### **Fulfilled** *(Promise hoàn thành thành công)*
 
-### `await` có block thread không?
+### **Rejected** *(Promise kết thúc với lỗi)*
 
-> Await một Promise thực sự asynchronous không giữ main thread đứng chờ. Nhưng code synchronous chạy trước hoặc sau `await` vẫn chạy trên JavaScript thread và vẫn có thể block.
+### **Settled** *(Promise đã fulfilled hoặc rejected)*
+
+⚠️ **Dễ bị bắt bẻ:**
+
+> “`await` không block.”
+
+✅ **Cách nói an toàn:**
+
+> `await` một Promise thực sự asynchronous không giữ main thread đứng chờ. Nhưng synchronous JavaScript chạy trước hoặc sau `await` vẫn có thể block.
 
 ---
 
 # 9. `Promise.all` và Concurrency
 
-## Bài nói
+## 💬 Bài nói
 
-> `Promise.all` hữu ích khi em có nhiều asynchronous task độc lập. Thay vì await task 1 xong mới bắt đầu task 2, em có thể start nhiều task rồi chờ tất cả hoàn thành.
+> `Promise.all` hữu ích khi em có nhiều asynchronous task độc lập. Thay vì chờ task 1 xong rồi mới bắt đầu task 2, em có thể start nhiều task và chờ tất cả hoàn thành.
 >
-> Nhưng `Promise.all` không tự giới hạn số task đang chạy. Nếu em map 1.000 shop thành 1.000 Promise gọi database/API, em có thể tạo áp lực rất lớn lên connection pool hoặc API rate limit.
+> Tuy nhiên `Promise.all` không tự giới hạn số task đang chạy. Nếu em map 1.000 shop thành 1.000 Promise gọi database/API thì application có thể tạo áp lực rất lớn lên database connection pool hoặc API rate limit.
 >
-> Em từng gặp case gần như vậy với batch nhiều shop. Cách xử lý tốt hơn là bounded concurrency, ví dụ chỉ cho 5 hoặc 10 shop xử lý đồng thời, xong một shop mới lấy shop tiếp theo.
+> Với collection lớn em thường dùng **bounded concurrency** — tức là vẫn chạy nhiều task cùng lúc nhưng đặt giới hạn rõ ràng, ví dụ tối đa 5 hoặc 10 shop đang active.
 
-### Concurrency là gì?
+### **Concurrency** *(nhiều task cùng đang trong quá trình xử lý)*
 
-> Concurrency nghĩa là nhiều task cùng tồn tại trong quá trình xử lý và thời gian của chúng có thể overlap. Với I/O, task A có thể đang chờ database trong lúc application tiến hành task B.
+### **Parallelism** *(nhiều task thực sự execute cùng một thời điểm trên nhiều CPU/thread)*
 
-### Parallelism là gì?
+Concurrency không bắt buộc phải là parallelism.
 
-> Parallelism nghĩa là nhiều công việc thực sự thực thi cùng một thời điểm, ví dụ trên nhiều CPU core/threads. Concurrency không bắt buộc phải là parallelism.
+### **Connection pool** *(nhóm database connections được tái sử dụng)*
 
-### Connection pool là gì?
-
-> Là một nhóm database connections được application tái sử dụng. Vì số connection có giới hạn, nếu em phát quá nhiều query cùng lúc thì chúng phải chờ connection rảnh và có thể timeout.
+Nếu pool có 20 connection nhưng hàng trăm query cùng cần connection thì nhiều query phải chờ và có thể timeout.
 
 ---
 
 # 10. CPU-bound và Worker Threads
 
-> Nếu một request chạy vòng lặp tính toán rất lớn, JavaScript thread bị chiếm cho đến khi đoạn synchronous đó xong. Trong thời gian đó Event Loop không thể cho các JavaScript callbacks khác chạy bình thường.
+## 📌 Ví dụ
 
-### Worker Thread là gì?
+```js
+app.get('/heavy', (req, res) => {
+  let total = 0;
+  for (let i = 0; i < 10_000_000_000; i++) {
+    total += i;
+  }
+  res.send(String(total));
+});
+```
 
-> Worker Threads cho phép chạy JavaScript trên thread khác trong cùng Node.js process. Nó phù hợp khi mình thực sự có CPU-heavy JavaScript cần offload khỏi main thread.
+Trong lúc vòng lặp chạy, main JS thread bị chiếm.
+
+## **Worker Thread** *(thread khác trong Node process có thể chạy JavaScript riêng)*
+
+Phù hợp khi thật sự có CPU-heavy JavaScript cần đưa ra khỏi main thread.
 
 ### Khi nào không cần Worker Thread?
 
-> Nếu task chủ yếu là chờ database/API thì Worker Thread thường không giải quyết đúng vấn đề. Node đã phù hợp với asynchronous I/O. Nếu task dài và không cần response ngay, background job/queue có thể phù hợp hơn.
+> Nếu task chủ yếu là chờ database/API thì Worker Thread thường không giải quyết đúng vấn đề. Node vốn đã xử lý I/O concurrency tốt; thêm worker có thể chỉ làm kiến trúc phức tạp hơn.
 
-### Worker Thread vs Child Process?
+### Worker Thread vs Child Process
 
-> Worker Threads là các thread trong cùng process và có thể chia sẻ memory qua cơ chế như `SharedArrayBuffer`. Child Process là process riêng với memory space riêng, isolation mạnh hơn nhưng communication thường tốn overhead hơn.
+- **Worker Thread**: cùng process, có thể chia sẻ memory bằng cơ chế phù hợp.
+- **Child Process**: process riêng, memory space riêng, isolation mạnh hơn nhưng communication nặng hơn.
 
 ---
 
-# 11. Streams và Backpressure
+# 11. Stream & Backpressure
 
-## Stream là gì?
+## 💬 Bài nói
 
-> Stream cho phép xử lý dữ liệu từng phần, hay từng chunk, thay vì phải load toàn bộ dữ liệu vào RAM rồi mới xử lý.
-
-**Ví dụ:** file 2 GB. Nếu `readFile` toàn bộ, application có thể cần giữ lượng memory rất lớn. Với stream, em đọc một chunk, xử lý/ghi nó, rồi tiếp tục chunk sau.
-
-### Chunk là gì?
-
-> Chunk đơn giản là một phần nhỏ của luồng dữ liệu, ví dụ một block bytes của file.
-
-### Backpressure là gì?
-
-> Backpressure xảy ra ở bài toán producer-consumer. Producer tạo dữ liệu nhanh hơn consumer xử lý. Nếu producer cứ tiếp tục đẩy vô hạn, buffer/memory có thể tăng.
+> Với file lớn em ưu tiên stream khi không cần load toàn bộ file vào memory. Stream xử lý dữ liệu theo từng phần nhỏ, gọi là chunk.
 >
-> Cơ chế backpressure cho producer biết cần chậm lại. Với Writable stream, `write()` trả `false` là tín hiệu không nên tiếp tục đẩy dữ liệu ngay; có thể chờ `drain`. `pipe()`/`pipeline()` giúp phối hợp flow này.
+> Tuy nhiên nếu phía đọc tạo dữ liệu nhanh hơn phía ghi hoặc network xử lý thì buffer có thể tăng. Lúc đó cần **backpressure** — cơ chế làm phía tạo dữ liệu chậm lại để phía nhận theo kịp.
 
-### Producer và Consumer là gì?
+### **Chunk** *(một phần nhỏ của dữ liệu lớn)*
 
-> Producer là phía tạo/đọc ra dữ liệu; consumer là phía nhận và xử lý/ghi dữ liệu. Ví dụ đọc file là producer và upload destination có thể là consumer.
+### **Producer** *(phía tạo/đọc dữ liệu)*
 
-### Các loại stream?
+### **Consumer** *(phía nhận/xử lý dữ liệu)*
 
-> Readable để đọc, Writable để ghi, Duplex vừa đọc vừa ghi, Transform vừa nhận dữ liệu vừa biến đổi rồi output dữ liệu khác.
+### **Backpressure** *(điều tiết producer khi consumer xử lý không kịp)*
+
+Với Writable stream, `write()` có thể trả `false`. Khi đó producer nên chờ `drain`, hoặc sử dụng `pipe()`/`pipeline()` để Node phối hợp flow.
+
+📌 Ví dụ: đọc file 5GB từ disk rất nhanh nhưng upload qua network chậm hơn. Nếu cứ đọc không giới hạn, memory buffer có thể tăng.
 
 ---
 
 # 12. Memory Leak
 
-## Memory leak nghĩa là gì?
+## 💬 Bài nói
 
-> Trong JavaScript có garbage collector, nhưng object chỉ được giải phóng khi không còn reference cần thiết tới nó. Memory leak thường xảy ra khi application vô tình giữ reference tới dữ liệu không còn cần dùng, khiến GC không thể thu hồi.
+> Nếu memory của Node process tăng dần và không giảm, em không kết luận ngay là memory leak. Em xem trước traffic/load, heap usage theo thời gian và object nào đang bị giữ lại.
+>
+> Các nguyên nhân thường gặp gồm cache không giới hạn, event listener không cleanup, timer, global Map/array hoặc closure giữ reference tới object lớn.
+>
+> Khi debug em dùng heap snapshot/profiler để xem object nào vẫn bị giữ sau nhiều vòng garbage collection.
 
-### Ví dụ
+### **Garbage Collection / GC** *(cơ chế runtime tự thu hồi memory của object không còn được tham chiếu)*
 
-> Cache là một `Map` global và cứ thêm key mới nhưng không TTL/eviction. Dù request đã xong, Map vẫn giữ reference nên memory tiếp tục tăng.
+### **Retained object** *(object vẫn còn reference nên GC chưa thể thu hồi)*
 
-### GC là gì?
-
-> Garbage Collector là cơ chế runtime tự tìm các object không còn reachable để thu hồi memory. Có GC không có nghĩa application không thể leak; nếu code vẫn giữ reference thì GC coi object đó vẫn còn dùng.
-
-### Debug thế nào?
-
-> Em theo dõi heap theo thời gian, kiểm tra xem memory có tăng liên tục sau khi load giảm không, rồi dùng heap snapshot/profiler để xem loại object nào bị giữ lại và reference chain nào giữ chúng.
+⚠️ Memory tăng không tự động đồng nghĩa memory leak.
 
 ---
 
 # 13. Graceful Shutdown
 
-## Là gì?
+## 💬 Bài nói
 
-> Graceful shutdown nghĩa là khi process cần dừng, mình không kill ngay giữa lúc đang xử lý request/job. Application ngừng nhận traffic mới, cho các công việc đang chạy một khoảng thời gian để hoàn thành, đóng database/Redis connection, dừng consumer và sau đó exit.
+> Khi process nhận tín hiệu dừng như `SIGTERM`, em không muốn kill ngay nếu đang có request/job quan trọng. Em ngừng nhận traffic mới, cho request đang chạy hoàn thành trong một timeout hợp lý, đóng database/Redis connection, dừng consumer cần thiết rồi exit.
 
-### In-flight request là gì?
+### **Graceful shutdown** *(tắt service có kiểm soát để giảm request/job bị cắt giữa chừng)*
 
-> Là request đã vào server và đang được xử lý nhưng chưa trả response xong.
-
-### Tại sao cần timeout cuối?
-
-> Nếu một request hoặc resource treo mãi, process cũng không thể chờ vô hạn. Vì vậy graceful shutdown thường có deadline; quá deadline thì application buộc phải exit và dựa vào retry/idempotency cho công việc cần phục hồi.
+### **In-flight request** *(request đã bắt đầu nhưng chưa hoàn thành)*
 
 ---
 
-# 14. Chuỗi câu hỏi interviewer có thể hỏi
+# 🎯 Rapid-fire follow-up
 
-### "Node single-thread mà sao xử lý nhiều request?"
+### Node single-threaded nghĩa là gì?
 
-> JavaScript callback chủ yếu chạy trên main thread, nhưng phần lớn thời gian I/O là chờ external system. Node dùng asynchronous I/O + Event Loop để không giữ main JS thread đứng chờ từng I/O operation.
+> JavaScript application chủ yếu execute trên một main thread. Runtime vẫn dùng OS asynchronous mechanisms và worker threads cho một số operation.
 
-### "Async có nghĩa là chạy thread khác không?"
+### `async/await` có tạo thread mới không?
 
-> Không. Async mô tả cách công việc được chờ/schedule. Một số operation có thể dùng libuv worker pool, một số network I/O dùng OS event mechanism, còn Promise bản thân không phải thread.
+> Không.
 
-### "Tại sao CPU-heavy lại block?"
+### Promise có phải thread không?
 
-> Vì đoạn JavaScript synchronous CPU-heavy đang chiếm main JS thread. Event Loop không thể chạy JavaScript callback khác cho tới khi đoạn đó nhường thread.
+> Không. Promise mô tả kết quả bất đồng bộ và cách continuation được schedule.
 
-### "Tại sao Stream tiết kiệm memory?"
+### CPU-heavy gây vấn đề gì?
 
-> Vì xử lý theo chunk thay vì giữ toàn bộ dataset/file trong memory cùng lúc.
+> Nếu chạy synchronous lâu trên main JavaScript thread thì block Event Loop và làm request khác phải chờ.
 
-### "Backpressure nếu không xử lý thì sao?"
+### Stream lợi gì?
 
-> Producer có thể tiếp tục tạo dữ liệu nhanh hơn consumer giải phóng, buffer tăng và cuối cùng memory/latency có thể tăng mạnh.
+> Xử lý dữ liệu theo chunk, tránh phải load toàn bộ dữ liệu lớn vào memory.
 
-## Cách nhớ bằng câu chuyện
+### Backpressure là gì?
 
-`Node chạy JS bằng V8 → JS chủ yếu main thread → I/O không đứng chờ → libuv/OS báo khi sẵn sàng → Event Loop cho callback chạy → Promise có microtask → CPU-heavy block → Worker cho CPU → Stream cho dữ liệu lớn → backpressure khi bên ghi chậm`
+> Cơ chế làm producer chậm lại khi consumer xử lý không kịp.
+
+---
+
+# ⚠️ Những câu không nên nói
+
+❌ “Node.js chỉ có một thread.”  
+✅ “JavaScript application chủ yếu chạy trên một main thread, nhưng runtime còn có OS async mechanisms và worker pool.”
+
+❌ “Async operation sẽ tạo thread mới.”  
+✅ “Async không đồng nghĩa tạo thread; tùy operation mà Node dùng OS async mechanism hoặc worker pool.”
+
+❌ “`setTimeout(0)` chạy ngay.”  
+✅ “0 là minimum delay; callback vẫn phải chờ tới lúc timer được xử lý.”
+
+❌ “`Promise.all` chạy parallel.”  
+✅ “`Promise.all` start/chờ nhiều asynchronous task; mức parallel thực tế phụ thuộc bản chất operation.”
+
+---
+
+# 📌 Cách nhớ
+
+**V8 → main JS thread → async I/O → Event Loop → Promise/microtask → libuv → CPU blocking → Worker → Stream/backpressure**
+
+Đừng học chuỗi này như định nghĩa. Hãy dùng nó như bản đồ để kể từ trên xuống.
