@@ -1,63 +1,126 @@
 # 01 — Giới thiệu bản thân
 
-## Bài nói 45–60 giây
-
-> Em là Backend Developer, công việc chính của em tập trung vào Node.js/TypeScript và các hệ thống tích hợp với bên thứ ba, đặc biệt là Shopify.
->
-> Trong các dự án gần đây em làm với NestJS/Express, PostgreSQL, MongoDB, Redis và AWS S3. Ngoài việc viết API, em còn xử lý các luồng như đồng bộ dữ liệu giữa Shopify và hệ thống nội bộ, webhook, background job, giới hạn API và upload file lớn.
->
-> Một số vấn đề thực tế em từng gặp là job xử lý quá nhiều shop cùng lúc khiến database hết connection để phục vụ query mới, dữ liệu local cập nhật chậm hơn Shopify, hoặc file lớn upload qua Nginx bị giới hạn kích thước và timeout.
->
-> Qua các case đó em quen với cách đi từ biểu hiện của lỗi, kiểm tra flow/log rồi tìm nguyên nhân gốc trước khi sửa. Em cố gắng không chỉ làm cho lỗi biến mất mà còn hiểu vì sao nó xảy ra và cách tránh lặp lại.
-
-## Bản ngắn 20–30 giây
-
-> Em là Backend Developer, chủ yếu làm Node.js/TypeScript và các hệ thống tích hợp Shopify. Em có kinh nghiệm với PostgreSQL, MongoDB, Redis, AWS và background job. Phần em làm khá nhiều là đồng bộ dữ liệu, tích hợp API bên thứ ba và xử lý các vấn đề production như giới hạn API, nhiều task chạy cùng lúc và database connection pool.
+Mục tiêu của phần này là **nói tự nhiên, dễ nối sang project thực tế**, không biến phần giới thiệu thành danh sách công nghệ.
 
 ---
 
-# Những từ trong phần giới thiệu dễ bị hỏi
+# 💬 Bài nói 45–60 giây
 
-### Integration là gì?
-
-> Em dùng từ integration để chỉ việc hệ thống của mình kết nối và trao đổi dữ liệu với hệ thống khác, ví dụ gọi Shopify API, nhận Shopify webhook rồi lưu dữ liệu cần thiết vào database của mình.
-
-### Background job là gì?
-
-> Là công việc không cần hoàn thành ngay trong request của user. Ví dụ đồng bộ dữ liệu của nhiều shop có thể được đưa ra job chạy phía sau để API không phải chờ quá lâu.
-
-### Webhook là gì?
-
-> Webhook là cách hệ thống bên ngoài chủ động gọi vào endpoint của mình khi có sự kiện. Ví dụ khi dữ liệu trên Shopify thay đổi, Shopify có thể gửi webhook để hệ thống của mình cập nhật theo thay vì phải liên tục hỏi Shopify xem có gì thay đổi không.
-
-### Connection pool là gì?
-
-> Application thường giữ một nhóm database connection để tái sử dụng. Khi tất cả connection đang bận, query mới phải chờ. Nếu phải chờ quá lâu thì có thể timeout.
-
-### Root cause là gì?
-
-> Là nguyên nhân gốc tạo ra vấn đề. Ví dụ Prisma báo timeout chỉ là biểu hiện; nguyên nhân gốc có thể là job tạo quá nhiều query cùng lúc làm hết connection pool.
+> Em là Backend Developer, công việc chính của em tập trung vào Node.js và TypeScript. Trong các dự án gần đây em làm khá nhiều với Shopify và các hệ thống tích hợp bên thứ ba.
+>
+> Công việc của em không chỉ là viết CRUD API mà còn có các bài toán như đồng bộ dữ liệu giữa nhiều hệ thống, xử lý webhook, background job, giới hạn API, database performance và upload file lớn.
+>
+> Một số vấn đề production em từng gặp là job chạy quá nhiều task cùng lúc làm database connection bị thiếu, dữ liệu local chưa cập nhật kịp theo Shopify, hoặc upload file lớn bị giới hạn ở Nginx/server.
+>
+> Qua những case đó, em quen với việc trước tiên phải hiểu flow của hệ thống, xác định nguyên nhân gốc rồi mới chọn giải pháp. Em muốn tiếp tục phát triển sâu hơn về backend architecture và system design.
 
 ---
 
-# Interviewer có thể hỏi tiếp
+# 💬 Bản ngắn 20–30 giây
 
-### Dự án nào em thấy khó nhất?
+> Em là Backend Developer, chủ yếu làm Node.js/TypeScript. Em có kinh nghiệm với Shopify integration, PostgreSQL, MongoDB, Redis và AWS. Phần em làm khá nhiều là API integration, data synchronization, background jobs và xử lý các vấn đề production liên quan tới concurrency, database và external API.
 
-> Một case em nhớ khá rõ là job xử lý dữ liệu cho nhiều shop. Ban đầu em dùng `Promise.all` để giảm thời gian xử lý. Khi số lượng shop tăng, số query chạy cùng lúc tăng theo và Prisma bắt đầu timeout khi lấy database connection.
->
-> Em kiểm tra lại flow của job và connection pool, sau đó chuyển từ việc cho toàn bộ shop chạy cùng lúc sang giới hạn số shop được xử lý đồng thời. Cách này làm job có thể lâu hơn một chút nhưng database ổn định hơn.
+---
 
-### Em mạnh nhất phần nào?
+# 🧠 Tại sao nên giới thiệu như vậy?
 
-> Em tự tin nhất ở backend integration và xử lý flow dữ liệu giữa nhiều hệ thống. Khi làm với Shopify hoặc API bên thứ ba, em không chỉ quan tâm gọi API thành công mà còn để ý giới hạn request, retry khi lỗi, dữ liệu cập nhật chậm, webhook gửi trùng và cách khôi phục khi một bước thất bại.
+Interviewer thường không cần nghe toàn bộ stack ngay từ đầu. Phần giới thiệu nên tạo ra **những nhánh bạn sẵn sàng bị hỏi sâu**.
 
-### Điểm em muốn cải thiện?
+Ví dụ khi bạn nói:
 
-> Em muốn đi sâu hơn về system design, tức là cách nhìn toàn bộ hệ thống khi số user, dữ liệu hoặc workload tăng lên. Em đã gặp các vấn đề thực tế như connection pool, concurrency và background jobs, nên em muốn hệ thống hóa các kinh nghiệm đó để thiết kế tốt hơn ngay từ đầu.
+> “Em từng gặp job chạy quá nhiều task cùng lúc làm database connection bị thiếu.”
 
-## Cách nhớ
+Interviewer có thể hỏi:
 
-Không học thuộc paragraph. Chỉ nhớ 5 ý:
+- Vì sao lại thiếu connection?
+- `Promise.all` liên quan gì?
+- Connection pool là gì?
+- Tại sao không tăng pool?
 
-`Backend → Node.js → Integration → Vấn đề production → Tìm nguyên nhân rồi mới sửa`
+Đây đều là những phần có case thực tế để kể tiếp.
+
+---
+
+# 🧾 Thuật ngữ trong phần giới thiệu
+
+### **Backend integration** *(kết nối backend của mình với một hệ thống khác)*
+
+Ví dụ application gọi Shopify API, nhận Shopify webhook, gọi Stripe hoặc upload file lên S3.
+
+### **Webhook** *(HTTP request mà hệ thống bên ngoài chủ động gửi cho mình khi có sự kiện)*
+
+📌 Ví dụ: khi inventory thay đổi, Shopify gửi một request tới endpoint của application để báo có thay đổi.
+
+### **Background job** *(công việc chạy ngoài request-response hiện tại)*
+
+📌 Ví dụ: đồng bộ dữ liệu 1.000 shop không cần bắt user chờ trong một HTTP request. Application có thể tạo job và worker xử lý sau.
+
+### **Connection pool** *(một nhóm database connection được giữ sẵn để tái sử dụng)*
+
+Nếu tất cả connection đang bận thì query mới phải chờ. Nếu chờ quá lâu có thể timeout.
+
+### **Concurrency** *(nhiều task cùng đang trong quá trình xử lý)*
+
+Không có nghĩa tất cả JavaScript đều thực sự chạy cùng một lúc trên nhiều CPU core. Với I/O, nhiều task có thể cùng đang chờ database/API.
+
+### **Root cause** *(nguyên nhân gốc)*
+
+Ví dụ Prisma báo timeout là **biểu hiện**. Nguyên nhân gốc có thể là job tạo quá nhiều query cùng lúc khiến connection pool hết connection.
+
+---
+
+# 🎯 Interviewer có thể hỏi tiếp
+
+## Dự án nào em thấy khó nhất?
+
+> Một case em nhớ khá rõ là background job xử lý dữ liệu cho nhiều shop. Ban đầu em dùng `Promise.all` để giảm thời gian chạy. Khi số shop tăng, nhiều database query được start cùng lúc và Prisma bắt đầu timeout khi lấy connection. Em kiểm tra flow của job và connection pool rồi chuyển sang giới hạn số shop được xử lý cùng lúc. Cách này ổn định hơn, đổi lại job chạy lâu hơn một chút.
+
+## Em mạnh nhất phần nào?
+
+> Em thấy mình có kinh nghiệm thực tế nhiều nhất ở backend integration và xử lý flow dữ liệu giữa các hệ thống. Khi làm với Shopify hoặc third-party API, ngoài việc gọi API em thường phải quan tâm tới rate limit, webhook, retry, dữ liệu có thể cập nhật chậm và trường hợp request bị chạy lại.
+
+## Điểm em muốn cải thiện?
+
+> Em muốn đi sâu hơn về system design và cách thiết kế hệ thống khi scale lớn. Trước đây em đã gặp các vấn đề thực tế như connection pool, concurrency, background jobs và external API nên em muốn hệ thống hóa những kinh nghiệm đó thành khả năng thiết kế tốt hơn.
+
+## Tại sao em thích backend?
+
+> Em thích phần backend vì nó không chỉ là viết endpoint. Em thấy thú vị ở việc dữ liệu đi qua nhiều thành phần như API, database, queue, external service rồi mình phải đảm bảo flow vẫn đúng khi có lỗi hoặc tải tăng.
+
+---
+
+# ⚠️ Dễ bị bắt bẻ
+
+## 1. “Em tối ưu performance rất nhiều.”
+
+Câu này quá rộng. Interviewer có thể hỏi ngay “tối ưu gì?” hoặc “đo bằng gì?”.
+
+✅ **Cách nói an toàn:**
+
+> Em từng xử lý một số vấn đề performance cụ thể, ví dụ query/database connection bị quá tải khi background job chạy nhiều task cùng lúc.
+
+## 2. “Em đảm bảo data consistency giữa Shopify và database.”
+
+Nghe như dữ liệu luôn đồng bộ tuyệt đối, trong khi thực tế có thể có độ trễ.
+
+✅ **Cách nói an toàn:**
+
+> Em thiết kế để dữ liệu local được cập nhật qua webhook và có job kiểm tra lại định kỳ để giảm trường hợp bị lệch.
+
+## 3. “Em làm system design.”
+
+Nếu chưa thực sự chịu trách nhiệm thiết kế toàn bộ hệ thống thì không nên nói quá rộng.
+
+✅ **Cách nói an toàn:**
+
+> Em có tham gia các quyết định thiết kế ở mức backend flow, database, job processing và integration; hiện tại em muốn phát triển sâu hơn về system design tổng thể.
+
+---
+
+# 📌 Cách nhớ
+
+Không học thuộc paragraph. Chỉ nhớ 5 điểm:
+
+**Backend → Node.js → Integration → Production problems → Cách phân tích nguyên nhân**
+
+Khi interviewer dừng ở điểm nào thì mở rộng điểm đó.
