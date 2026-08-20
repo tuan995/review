@@ -1,240 +1,450 @@
 # 13 — System Design Speaking Framework
 
-Mục tiêu của chương này không phải học thuộc một architecture. Mục tiêu là **biết nói suy nghĩ của mình thành từng bước và giải thích tại sao thêm từng component**.
-
-# 1. Bắt đầu bằng yêu cầu
-
-## Bài nói
-
-> Trước khi thiết kế, em muốn hiểu hệ thống cần làm gì, có bao nhiêu user/request dự kiến, dữ liệu lớn tới mức nào và phần nào quan trọng nhất.
->
-> Ví dụ có hệ thống ưu tiên response nhanh, có hệ thống ưu tiên dữ liệu phải đúng tuyệt đối, có hệ thống lại cần tiếp tục hoạt động ngay cả khi một service lỗi. Nếu chưa biết yêu cầu thì em chưa muốn thêm cache, queue hay chia database ngay.
-
-### Functional requirement là gì?
-
-> Là hệ thống **phải làm được chức năng gì**, ví dụ user tạo order, xem order, upload file hoặc đồng bộ product.
-
-### Non-functional requirement là gì?
-
-> Là yêu cầu về cách hệ thống vận hành, ví dụ response cần nhanh tới mức nào, chịu được bao nhiêu request, downtime chấp nhận được không và dữ liệu có thể chậm cập nhật bao lâu.
-
-### Latency là gì?
-
-> Là thời gian từ lúc request bắt đầu tới lúc có kết quả. Nói đơn giản là user phải chờ bao lâu.
-
-### Availability là gì?
-
-> Là mức độ hệ thống có thể tiếp tục phục vụ request khi có lỗi. Khi nói phỏng vấn em có thể nói đơn giản “hệ thống có cần luôn sẵn sàng hay có thể chấp nhận downtime ngắn”.
-
-### Correctness là gì?
-
-> Là kết quả nghiệp vụ có đúng không. Ví dụ payment không được ghi nhận hai lần, stock không được bán âm hoặc order phải có dữ liệu đầy đủ.
+Mục tiêu của chương này không phải học thuộc một architecture mẫu. Mục tiêu là **biết nói suy nghĩ theo từng bước**, giải thích được tại sao thêm một component và tránh dùng thuật ngữ lớn khi chưa cần.
 
 ---
 
-# 2. Vẽ flow đơn giản trước
+# 1. Bắt đầu bằng requirements
 
-> Em thường bắt đầu từ flow tối thiểu:
+## 💬 Bài nói
+
+> Trước khi thiết kế em muốn xác nhận hệ thống cần làm gì, lượng traffic/data khoảng bao nhiêu và yêu cầu nào quan trọng nhất. Em không muốn thêm cache, queue hay sharding ngay khi chưa biết bottleneck thực tế.
+
+## 🧾 Thuật ngữ
+
+### **Functional requirement** *(hệ thống phải làm được chức năng gì)*
+
+Ví dụ upload file, sync product, tạo payment.
+
+### **Non-functional requirement** *(yêu cầu về chất lượng hệ thống)*
+
+Ví dụ latency, availability, security, scalability.
+
+### **Latency** *(thời gian từ khi request bắt đầu tới khi có response)*
+
+### **Availability** *(khả năng hệ thống vẫn phục vụ được khi một phần gặp lỗi)*
+
+### **Scalability** *(khả năng hệ thống tiếp tục xử lý được khi traffic/data tăng)*
+
+### **Correctness** *(dữ liệu và business behavior vẫn đúng)*
+
+⚠️ **Dễ bị bắt bẻ:**
+
+> “Hệ thống cần high availability và high scalability.”
+
+✅ **Cách nói an toàn:**
+
+> Em hỏi cụ thể downtime có chấp nhận không, traffic hiện tại/dự kiến bao nhiêu và phần nào quan trọng nhất. Không phải mọi hệ thống đều cần cùng mức availability/scale.
+
+---
+
+# 2. Ước lượng scale
+
+Không cần tính cực kỳ chính xác. Mục tiêu là biết order of magnitude.
+
+Ví dụ interviewer nói:
+
+- 100.000 shops;
+- mỗi shop 10.000 products;
+- mỗi product update vài lần/ngày.
+
+Em có thể suy nghĩ:
+
+- tổng số entity;
+- request/event rate trung bình;
+- peak traffic;
+- storage growth;
+- external API rate limit.
+
+### **Peak traffic** *(mức tải cao nhất trong một khoảng thời gian, không phải chỉ average)*
+
+### **Order of magnitude** *(ước lượng cỡ hàng nghìn, triệu, tỷ thay vì cần số chính xác)*
+
+---
+
+# 3. High-level design trước
+
+## 💬 Bài nói
+
+> Em bắt đầu từ flow đơn giản nhất: client → API → service → database. Sau đó em mới thêm Redis, queue hoặc search nếu requirement cho thấy cần.
 
 ```text
 Client
   |
-API
+Load Balancer
   |
-Business logic
+API instances
+  |
+  +---- Redis
   |
 Database
+  |
+Queue → Workers → External APIs
 ```
 
-> Sau đó em mới hỏi từng điểm có vấn đề gì. Nếu traffic tăng mới nghĩ tới nhiều API instance/load balancer. Nếu đọc DB quá nhiều mới cân nhắc cache. Nếu task dài mới cân nhắc queue.
+### **High-level design** *(sơ đồ các component chính và cách chúng giao tiếp)*
 
-### Load balancer là gì?
+### **Component** *(một phần của hệ thống như API, DB, queue, worker)*
 
-> Là thành phần nhận request rồi phân phối request sang nhiều application instance. Mục tiêu là không để tất cả traffic chỉ đi vào một server.
-
-### Instance là gì?
-
-> Có thể hiểu là một bản application đang chạy. Ví dụ mình chạy 3 Node.js process/container cùng phục vụ một API thì có 3 instance.
+⚠️ Không cần vẽ 15 component ngay từ phút đầu.
 
 ---
 
-# 3. Chọn database
+# 4. Load Balancer & Horizontal Scaling
 
-## Bài nói
+## **Load balancer** *(phân phối request tới nhiều application instance)*
 
-> Em chọn database dựa trên loại dữ liệu và cách hệ thống cần truy cập, không chọn chỉ vì quen dùng.
->
-> Nếu dữ liệu có quan hệ rõ, cần transaction giữa nhiều record và query relational nhiều thì PostgreSQL là lựa chọn em quen dùng. Với dữ liệu dạng document linh hoạt và access pattern phù hợp, MongoDB có thể hợp lý hơn.
+## **Horizontal scaling** *(tăng số instance/server thay vì chỉ tăng sức mạnh một server)*
 
-### Access pattern là gì?
+## **Vertical scaling** *(tăng CPU/RAM cho server hiện tại)*
 
-> Là cách application thường đọc/ghi dữ liệu. Ví dụ query thường lấy order theo `shop + createdAt`, hoặc tìm product theo `shop + productId`. Thiết kế schema/index nên phục vụ những cách truy cập thực tế đó.
+## 💬 Cách nói
 
-### Relational database là gì?
+> Nếu API không giữ state quan trọng chỉ trong memory của một instance thì em có thể scale nhiều instance sau load balancer dễ hơn.
 
-> Là database tổ chức dữ liệu thành bảng có quan hệ với nhau và thường hỗ trợ SQL/transaction mạnh, ví dụ PostgreSQL/MySQL.
+### **Stateless API** *(một request không phụ thuộc vào session/state chỉ tồn tại trong memory của đúng một server)*
 
-### Document database là gì?
+Ví dụ auth dùng token hoặc session lưu ở shared storage thay vì memory của instance A.
 
-> Là database lưu dữ liệu theo document, thường gần với object/JSON hơn, ví dụ MongoDB. Không có nghĩa MongoDB luôn tốt hơn cho dữ liệu linh hoạt; vẫn phải xem query và consistency requirement.
+⚠️ “Stateless” không có nghĩa hệ thống không có database/state; nó chỉ nói application instance không giữ state riêng bắt buộc request sau phải quay lại đúng instance đó.
 
 ---
 
-# 4. Khi nào thêm cache?
+# 5. Chọn Database
 
-> Em thêm cache khi có dữ liệu đọc nhiều, tốn thời gian/tài nguyên để lấy lại và business chấp nhận dữ liệu có thể cũ trong một khoảng ngắn.
+## 💬 Bài nói
+
+> Em chọn database dựa trên data model và access pattern. Nếu dữ liệu có relation rõ, cần transaction và constraint mạnh thì relational database như PostgreSQL thường là lựa chọn tốt. Nếu dữ liệu tự nhiên theo document và access pattern phù hợp thì có thể cân nhắc MongoDB.
 >
-> Nếu thêm Redis, em phải trả lời tiếp: cache key là gì, giữ bao lâu và khi dữ liệu gốc thay đổi thì cache được xóa/cập nhật thế nào.
+> Em không chọn database chỉ vì nghe nói database đó scale tốt hơn.
 
-### Hot path là gì?
+### **Data model** *(cách mình tổ chức entity và relation)*
 
-> Nếu dùng từ này, em muốn nói **luồng được gọi rất thường xuyên hoặc ảnh hưởng trực tiếp tới latency của user**. Khi phỏng vấn có thể nói thẳng “API này bị gọi rất nhiều” thay vì dùng `hot path`.
+### **Access pattern** *(application thường đọc/ghi dữ liệu theo cách nào)*
+
+📌 Ví dụ nếu query chủ yếu là “orders của shop X theo thời gian”, index/schema nên phục vụ pattern đó.
 
 ---
 
-# 5. Khi nào thêm queue?
+# 6. Index
 
-> Em thêm queue khi task không cần xử lý ngay trong request, cần retry độc lập hoặc workload có thể dồn lên theo đợt.
->
-> Ví dụ cron tạo 100 nghìn task đồng bộ. Thay vì một process xử lý tất cả cùng lúc, em đưa từng task vào queue rồi để worker lấy ra với concurrency giới hạn.
+## 💬 Cách nói
 
-### “Decouple” là gì?
+> Em thiết kế index từ query quan trọng, không index tất cả column. Em xem filter, join, sort rồi validate bằng execution plan.
 
-> Nếu dùng từ này, em muốn nói **tách việc tạo task khỏi việc xử lý task**. API chỉ cần tạo job, worker xử lý sau. Khi nói phỏng vấn em ưu tiên giải thích flow này trước rồi mới gọi là decouple.
-
-### “Absorb traffic burst” là gì?
-
-> Nghĩa là khi task đến dồn dập, queue giữ chúng lại để worker xử lý dần thay vì ép downstream phải xử lý tất cả ngay lập tức.
-
-### Eventual consistency là gì?
-
-> Nghĩa là dữ liệu giữa các phần của hệ thống có thể chưa giống nhau ngay lập tức nhưng sau một khoảng thời gian sẽ được đồng bộ về trạng thái đúng.
->
-> Ví dụ webhook tới → event vào queue → worker vài giây sau mới update database. Trong vài giây đó dữ liệu local chưa phải mới nhất.
+### **Hot query** *(query chạy rất nhiều hoặc ảnh hưởng lớn tới latency/load)*
 
 ---
 
-# 6. External API
+# 7. Cache
 
-## Bài nói
+## Khi nào thêm Redis?
 
-> Với Shopify, Stripe hoặc Google, em coi service bên ngoài là dependency mình không kiểm soát hoàn toàn. Nó có thể timeout, giới hạn request hoặc trả lỗi.
->
-> Vì vậy em nghĩ trước về timeout, retry có giới hạn, tránh duplicate khi retry và cách kiểm tra lại trạng thái nếu webhook/event bị miss.
+> Nếu có dữ liệu được đọc rất nhiều nhưng ít đổi, hoặc computation/external API call tốn kém, em cân nhắc cache.
 
-### Dependency là gì?
+Nhưng phải trả lời tiếp:
 
-> Là một thành phần mà hệ thống mình phụ thuộc để hoàn thành công việc. Ví dụ nếu API của mình cần gọi Shopify thì Shopify là external dependency của flow đó.
+- TTL bao nhiêu?
+- dữ liệu có thể stale bao lâu?
+- invalidation thế nào?
+- Redis down thì sao?
 
-### Circuit breaker là gì?
+### **Cache invalidation** *(làm dữ liệu cache cũ mất hiệu lực khi source thay đổi)*
 
-> Nếu interviewer hỏi sâu: đây là pattern tạm ngừng gọi một service đang lỗi quá nhiều trong một khoảng thời gian để tránh tiếp tục dồn request vào nó.
->
-> Nếu chưa từng implement thì em không chủ động đưa từ này vào câu trả lời. Chỉ cần nói mình giới hạn retry và tránh tiếp tục spam service đang lỗi.
+### **Stale data** *(cache chưa cập nhật theo dữ liệu mới)*
 
----
+⚠️ **Dễ bị bắt bẻ:**
 
-# 7. Khi traffic tăng thì scale thế nào?
+> “Thêm Redis để giảm latency.”
 
-## Bài nói
+✅ **Cách nói an toàn:**
 
-> Em không nhảy ngay tới sharding. Đầu tiên em đo xem bottleneck nằm ở đâu: CPU của API, query DB, connection pool, external API hay queue worker.
->
-> Nếu API không giữ state riêng trong memory và có thể chạy nhiều bản giống nhau, em có thể tăng số instance sau load balancer.
->
-> Nếu database là bottleneck, em kiểm tra query/index trước. Sau đó mới cân nhắc các bước lớn hơn như read replica hoặc partition dữ liệu tùy trường hợp.
-
-### Stateless API là gì?
-
-> Là API không phụ thuộc vào state chỉ nằm trong memory của riêng một instance giữa các request. Ví dụ session quan trọng nằm ở shared storage/database thay vì chỉ ở RAM của server A.
->
-> Nhờ vậy request tiếp theo có thể đi vào server B mà vẫn xử lý được.
-
-### Horizontal scale là gì?
-
-> Là tăng số instance/server để chia tải. Ví dụ từ 2 API instances lên 6 instances.
-
-### Vertical scale là gì?
-
-> Là tăng tài nguyên của một server hiện tại, ví dụ thêm CPU/RAM.
-
-### Read replica là gì?
-
-> Là bản sao database chủ yếu dùng để phục vụ read. Nó có thể giảm tải read cho primary, nhưng dữ liệu replica có thể chậm hơn primary một chút tùy cơ chế replication.
-
-### Partitioning là gì?
-
-> Là chia dữ liệu/workload thành nhiều phần theo một tiêu chí, ví dụ theo shop hoặc khoảng thời gian, để không phải mọi thứ cùng dồn vào một chỗ.
-
-### Sharding là gì?
-
-> Là một dạng chia dữ liệu ra nhiều database/node độc lập theo shard key. Nó tăng độ phức tạp đáng kể nên em không chọn sớm nếu chưa có bottleneck thật sự yêu cầu.
+> Em chỉ thêm cache khi xác định read path hoặc external call là bottleneck và business chấp nhận được trade-off freshness/invalidation.
 
 ---
 
-# 8. Reliability — luôn hỏi “nếu lỗi thì sao?”
+# 8. Queue
 
-Khi thiết kế, em tự hỏi:
+## **Queue** *(hàng đợi lưu task để worker xử lý sau)*
 
-- Worker chết giữa job thì job có mất không?
-- Webhook gửi hai lần thì có duplicate data không?
-- Database update thành công nhưng external call fail thì trạng thái xử lý thế nào?
-- Redis down thì API còn chạy được không?
-- External API trả 429 thì worker có tiếp tục spam không?
-- Deploy nhiều instance thì cron có chạy trùng không?
+## 💬 Bài nói
 
-### Reliability là gì?
+> Em dùng queue khi task chạy lâu, cần retry, cần absorb traffic burst hoặc cần giới hạn tốc độ gọi downstream. Queue giúp request chính không phải chờ toàn bộ workflow.
 
-> Là khả năng hệ thống tiếp tục cho kết quả đúng và phục hồi hợp lý khi có lỗi. Khi phỏng vấn em thích nói cụ thể các failure case ở trên hơn là chỉ nói “hệ thống phải reliable”.
+### **Decouple** *(tách hai phần để không phải chạy đồng thời trong cùng request/process)*
+
+Ví dụ API chỉ enqueue job; worker xử lý Shopify API sau.
+
+### **Absorb burst** *(queue giữ lại lượng job tăng đột ngột để worker xử lý dần)*
+
+⚠️ Queue không làm work biến mất; nếu producer nhanh hơn consumer lâu dài thì backlog vẫn tăng.
 
 ---
 
-# 9. Ví dụ: thiết kế Shopify synchronization service
+# 9. Worker scaling
 
-## Bài nói
+## 💬 Cách nói
 
-> Với dữ liệu Shopify mà application cần đọc thường xuyên, em lưu một bản cần thiết trong database local để tránh mỗi request đều phải gọi Shopify.
+> Worker có thể scale nhiều instance, nhưng em không tăng worker vô hạn. Worker cuối cùng vẫn gọi database hoặc external API nên concurrency phải dựa trên capacity của downstream.
+
+### **Downstream** *(hệ thống mà worker gọi tới phía sau, ví dụ DB/Shopify)*
+
+### **Backlog** *(job đang chờ chưa xử lý)*
+
+### **Throughput** *(số job xử lý được trong một đơn vị thời gian)*
+
+---
+
+# 10. External API
+
+## 💬 Bài nói
+
+> Với Shopify, Stripe hoặc Google, em coi external service là dependency có thể timeout, rate limit hoặc trả lỗi. Vì vậy em nghĩ trước retry, idempotency và trường hợp dữ liệu local bị lệch.
+
+### **Dependency** *(hệ thống khác mà service của mình phụ thuộc vào)*
+
+### **Idempotency** *(operation chạy lại nhưng không tạo kết quả sai hoặc nhân đôi)*
+
+### **Reconciliation** *(job định kỳ kiểm tra lại hai hệ thống và sửa chênh lệch)*
+
+---
+
+# 11. Reliability
+
+Khi thiết kế, tự hỏi:
+
+- nếu worker chết giữa job?
+- nếu webhook gửi hai lần?
+- nếu DB update thành công nhưng external API fail?
+- nếu Redis down?
+- nếu API trả 429?
+- nếu deploy 5 instance thì cron chạy mấy lần?
+
+### **Failure mode** *(một cách cụ thể mà hệ thống có thể lỗi)*
+
+System design tốt không chỉ mô tả happy path.
+
+---
+
+# 12. Replication
+
+## **Replication** *(giữ nhiều bản copy dữ liệu trên nhiều database node)*
+
+Có thể dùng để:
+
+- tăng availability;
+- phục vụ read ở replica;
+- hỗ trợ failover.
+
+### **Read replica** *(database replica chủ yếu phục vụ đọc)*
+
+⚠️ Replica có thể có replication lag.
+
+### **Replication lag** *(replica chậm hơn primary một khoảng thời gian)*
+
+Vì vậy request vừa write xong rồi read từ replica có thể chưa thấy dữ liệu mới.
+
+---
+
+# 13. Partitioning / Sharding
+
+## **Partitioning** *(chia dữ liệu thành nhiều phần)*
+
+## **Sharding** *(chia dữ liệu qua nhiều database/server dựa trên shard key)*
+
+## 💬 Cách nói
+
+> Em không nhảy tới sharding ngay. Trước tiên em tối ưu query/index, kiểm soát connection và xem vertical scaling/read replica có đủ không. Sharding chỉ nên thêm khi một database/node không còn đáp ứng requirement hoặc có lý do rõ ràng.
+
+### **Shard key** *(field/quy tắc quyết định một record nằm ở shard nào)*
+
+📌 Ví dụ `shop_id` có thể là candidate nếu workload được tách tự nhiên theo shop, nhưng cần xem distribution và query cross-shop.
+
+### **Hot shard** *(một shard nhận quá nhiều traffic so với shard khác)*
+
+---
+
+# 14. Consistency
+
+## Nói đơn giản trước
+
+> Nếu dữ liệu được lưu nhiều nơi, có thể các bản copy không cập nhật cùng đúng một thời điểm. Em cần biết nghiệp vụ nào bắt buộc đọc dữ liệu mới nhất và nghiệp vụ nào chấp nhận chậm vài giây/phút.
+
+### **Strong consistency** *(sau write, read theo guarantee phù hợp thấy state mới nhất)*
+
+### **Eventual consistency** *(các bản copy có thể lệch tạm thời nhưng sẽ hội tụ lại sau)*
+
+⚠️ Đây là khái niệm lớn. Khi phỏng vấn nên gắn với ví dụ thay vì chỉ nói tên.
+
+📌 Inventory checkout cần correctness cao hơn analytics dashboard.
+
+---
+
+# 15. At-least-once vs Exactly-once
+
+## **At-least-once** *(message/job có thể được giao lại nhiều lần để giảm nguy cơ mất)*
+
+## 💬 Cách nói an toàn
+
+> Với queue/webhook em thường giả định event có thể tới hơn một lần, nên consumer phải idempotent.
+
+### **Exactly-once** *(mục tiêu mỗi logical event chỉ tạo effect đúng một lần)*
+
+Trong distributed system đây là chủ đề nhiều nuance. Không nên nói:
+
+> “Queue của em đảm bảo exactly-once nên không cần idempotency.”
+
+✅ Nói:
+
+> Em ưu tiên thiết kế idempotent processing để chịu được duplicate delivery.
+
+---
+
+# 16. Observability
+
+## **Observability** *(khả năng hiểu hệ thống đang xảy ra gì qua logs, metrics, traces)*
+
+Một design nên nghĩ tới:
+
+- request latency/error;
+- DB usage;
+- queue depth;
+- worker failure;
+- external API 429;
+- sync lag;
+- business mismatch.
+
+### **Sync lag** *(thời gian dữ liệu local chậm hơn source)*
+
+---
+
+# 17. Security
+
+Những câu hỏi cơ bản:
+
+- authentication?
+- authorization?
+- secret lưu ở đâu?
+- data encryption?
+- validation?
+- webhook signature?
+- rate limiting?
+- audit log nếu cần?
+
+### **Authentication** *(ai đang gọi)*
+
+### **Authorization** *(người đó được phép làm gì)*
+
+---
+
+# 18. Ví dụ: Shopify Synchronization Service
+
+## 💬 Bài nói 2 phút
+
+> Em coi Shopify là nguồn dữ liệu chính cho product/inventory thuộc Shopify. Application cần đọc dữ liệu thường xuyên nên em lưu một bản cần thiết trong database local để giảm latency và số API call.
 >
-> Khi Shopify có thay đổi cần cập nhật nhanh, hệ thống nhận webhook. Webhook handler kiểm tra request, tránh xử lý trùng rồi nếu task dài thì đưa vào queue.
+> Với thay đổi cần cập nhật nhanh, Shopify gửi webhook tới backend. Webhook handler verify request, kiểm tra duplicate rồi nếu xử lý dài thì enqueue job.
 >
-> Worker lấy job và update database, đồng thời giới hạn số job/request chạy cùng lúc để không làm quá tải database hoặc chạm Shopify rate limit.
+> Worker lấy job và update database. Em giới hạn worker concurrency và request rate vì cả database lẫn Shopify API đều có capacity/limit.
 >
-> Vì webhook có thể bị miss hoặc xử lý lỗi, em giữ thêm một job định kỳ để lấy lại dữ liệu quan trọng và sửa những record bị lệch.
+> Vì webhook có thể delay hoặc bị miss, em có scheduled reconciliation job để định kỳ đọc lại dữ liệu quan trọng từ Shopify và sửa record bị lệch.
 >
-> Em theo dõi số webhook lỗi, số job đang chờ, thời gian từ lúc Shopify thay đổi tới lúc local DB cập nhật và số lần bị 429.
+> Nếu scale lên nhiều shop, em chia workload thành job nhỏ theo shop/product thay vì một cron loop toàn bộ. Worker có thể scale horizontally nhưng vẫn giữ limiter theo downstream.
+>
+> Em theo dõi webhook failure, queue depth, oldest job age, sync lag, Shopify 429 và reconciliation mismatch để biết dữ liệu có đang bị chậm hay lệch không.
+
+## 📌 Sơ đồ
+
+```text
+Shopify
+   |
+ webhook
+   v
+API endpoint
+   |
+verify + dedup
+   |
+Queue
+   |
+Workers ---- limiter ---- Shopify API
+   |
+Database
+   ^
+   |
+Reconciliation cron
+```
+
+---
+
+# 🎯 Interviewer hỏi tiếp
 
 ### Tại sao vừa webhook vừa cron?
 
-> Webhook giúp cập nhật nhanh. Cron kiểm tra lại giúp sửa trường hợp webhook không tới hoặc xử lý thất bại.
+> Webhook giúp cập nhật nhanh. Cron reconciliation là lớp kiểm tra lại nếu webhook bị miss hoặc processing fail.
 
 ### Nếu có 100k shops?
 
-> Em không để một cron process cả 100k shop bằng `Promise.all`. Em chia workload thành job nhỏ trong queue, chạy nhiều worker nếu cần nhưng vẫn giới hạn concurrency và request rate theo khả năng DB/API.
+> Em không chạy một loop khổng lồ trong một process. Em partition workload thành jobs, queue chúng và scale workers. Nhưng em vẫn giới hạn concurrency/rate theo database và Shopify capacity.
+
+### Nếu một shop có dữ liệu cực lớn?
+
+> Em có thể chia tiếp theo page/product batch, checkpoint progress và tránh một job quá lớn giữ worker quá lâu.
+
+### Nếu database down?
+
+> Worker không nên ACK job thành công. Job có thể retry theo policy, nhưng cần backoff để không tạo thundering herd khi DB vừa hồi phục.
+
+### Nếu Redis/queue down?
+
+> API cần quyết định fail request tạo job hay persist theo một path khác tùy mức quan trọng. Em không nói queue “không bao giờ down”; availability của queue là một dependency cần thiết kế.
+
+### CAP theorem có cần nhắc không?
+
+> Chỉ khi interviewer hỏi distributed consistency sâu. Em không chủ động ném CAP vào mọi design. Em ưu tiên nói requirement cụ thể: khi network partition thì hệ thống ưu tiên availability hay consistency ở flow nào.
 
 ---
 
-# 10. Exactly-once / at-least-once — câu dễ bị hỏi mẹo
+# 19. Framework nói System Design
 
-### At-least-once nghĩa là gì?
+Có thể đi theo thứ tự:
 
-> Một message/job được đảm bảo cố gắng giao ít nhất một lần, nhưng có thể giao lại nhiều lần. Vì vậy consumer phải chịu được duplicate.
-
-### Exactly-once nghĩa là gì?
-
-> Theo cách nói đơn giản, business effect chỉ xảy ra đúng một lần. Trong distributed system, đạt “exactly-once” end-to-end rất khó vì network/retry có thể làm cùng message được xử lý lại.
->
-> Vì vậy trong nhiều flow em thực tế hơn khi chấp nhận message có thể được giao lại và thiết kế processing idempotent để kết quả cuối không bị duplicate.
-
-### Có nên chủ động nói “exactly-once” không?
-
-> Nếu interviewer chưa hỏi, em thường không chủ động dùng từ này. Em nói cụ thể hơn: **“queue có thể giao job lại nên handler của em phải chịu được việc chạy hai lần.”** Cách nói này ít mơ hồ hơn.
+1. **Clarify requirement** — cần làm gì?
+2. **Estimate scale** — traffic/data cỡ nào?
+3. **API/high-level flow** — request đi đâu?
+4. **Data model/DB** — dữ liệu lưu thế nào?
+5. **Index** — query chính là gì?
+6. **Cache** — có bottleneck read không?
+7. **Queue/worker** — task nào async?
+8. **External dependency** — timeout/rate limit?
+9. **Failure cases** — component chết thì sao?
+10. **Observability/security** — biết lỗi và bảo vệ hệ thống thế nào?
+11. **Bottleneck/trade-off** — phần nào cần scale tiếp?
 
 ---
 
-# Checklist nói System Design
+# ⚠️ Những câu dễ bị bắt bẻ
 
-`Hệ thống cần gì → scale bao nhiêu → flow đơn giản → database → chỗ nào thật sự cần cache/queue → external failure → nếu component chết thì sao → đo bottleneck → mới scale tiếp`
+❌ “Em dùng microservice để scale.”  
+✅ “Em chỉ tách service khi domain/deployment/scale cần độc lập; monolith vẫn có thể horizontal scale.”
 
-## Câu kết tốt
+❌ “NoSQL scale tốt hơn SQL.”  
+✅ “Khả năng scale phụ thuộc engine/architecture; em chọn database trước hết theo data model, query và consistency need.”
 
-> Đây là thiết kế mức tổng quan ban đầu. Em muốn dựa vào requirement và bottleneck thực tế để đi sâu tiếp, thay vì thêm nhiều component chỉ để architecture nhìn phức tạp hơn.
+❌ “Queue giải quyết traffic spike.”  
+✅ “Queue absorb burst tạm thời; nếu input rate luôn cao hơn processing rate thì backlog vẫn tăng.”
+
+❌ “Read replica tăng write performance.”  
+✅ “Read replica chủ yếu offload read; write thường vẫn đi primary theo architecture phổ biến.”
+
+❌ “Sharding để hệ thống scale.”  
+✅ “Sharding là bước phức tạp; em chỉ thêm khi bottleneck/data scale thực sự yêu cầu.”
+
+---
+
+# 📌 Câu kết tốt
+
+> Đây là high-level design ban đầu. Em sẽ đo bottleneck và đi sâu vào phần có requirement khó nhất thay vì thêm component chỉ để architecture trông phức tạp.
+
+# Cách nhớ
+
+**Requirement → scale → flow → DB/index → cache → queue/worker → external API → failure → observability/security → bottleneck/trade-off**
