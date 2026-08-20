@@ -2,9 +2,9 @@
 
 ## Cách giới thiệu dự án
 
-> Trong một số dự án gần đây em phát triển backend cho các ứng dụng liên quan tới Shopify. Backend chịu trách nhiệm nhận và đồng bộ dữ liệu từ Shopify, lưu dữ liệu cần thiết vào database, xử lý webhook/background jobs và cung cấp API cho frontend.
+> Trong một số dự án gần đây em phát triển backend cho các ứng dụng liên quan tới Shopify. Backend của em nhận dữ liệu từ Shopify, lưu những phần hệ thống cần dùng vào database, xử lý webhook và các job chạy phía sau, sau đó cung cấp API cho frontend.
 >
-> Vì phụ thuộc vào external API nên bài toán không chỉ là CRUD. Em phải xử lý rate limit, dữ liệu thay đổi ở Shopify, retry khi request fail và đảm bảo dữ liệu local không lệch quá lâu so với source of truth.
+> Điểm khó của dạng dự án này là dữ liệu nằm ở nhiều hệ thống khác nhau. Shopify có thể thay đổi trước, database của mình cập nhật sau; API bên ngoài có thể chậm, timeout hoặc giới hạn số request. Vì vậy ngoài CRUD, em phải nghĩ tới cách đồng bộ dữ liệu, retry khi lỗi và tránh xử lý cùng một sự kiện nhiều lần gây duplicate data.
 
 ---
 
@@ -12,23 +12,27 @@
 
 ## Bài nói
 
-> Có những dữ liệu em có thể lấy trực tiếp từ Shopify API, nhưng nếu frontend hoặc các internal service gọi Shopify cho mọi request thì hệ thống phụ thuộc rất mạnh vào latency và availability của Shopify, đồng thời dễ chạm rate limit.
+> Có những dữ liệu em có thể lấy trực tiếp từ Shopify API. Nhưng nếu mỗi lần frontend cần hiển thị dữ liệu lại gọi Shopify thì response của hệ thống phụ thuộc vào tốc độ và tình trạng của Shopify. Khi traffic tăng, số lần gọi cũng tăng và dễ chạm giới hạn API.
 >
-> Vì vậy với dữ liệu cần đọc thường xuyên, em lưu một representation cần thiết trong database của hệ thống. Request đọc thông thường sẽ lấy từ database, còn Shopify vẫn là source of truth và dữ liệu local được cập nhật thông qua webhook hoặc synchronization job.
+> Vì vậy với dữ liệu cần đọc thường xuyên, em lưu những field cần thiết vào database của hệ thống. Request thông thường đọc từ database của mình, còn Shopify vẫn là nơi giữ dữ liệu chính thức đối với dữ liệu do Shopify quản lý.
 >
-> Trade-off của cách này là xuất hiện bài toán data consistency. Database local có thể stale trong một khoảng thời gian, nên tùy loại dữ liệu em quyết định dữ liệu nào cần webhook gần real-time, dữ liệu nào eventual consistency là chấp nhận được.
+> Khi Shopify thay đổi, hệ thống local cập nhật thông qua webhook hoặc job đồng bộ. Đổi lại, dữ liệu trong database của mình có thể chậm hơn Shopify một khoảng ngắn. Với dữ liệu quan trọng như inventory, em cần cơ chế cập nhật nhanh và có job kiểm tra lại định kỳ.
+
+### “Source of truth” là gì?
+
+> Nếu em dùng từ này, em muốn nói **nơi được coi là dữ liệu chính thức khi hai hệ thống khác nhau**. Ví dụ với inventory do Shopify quản lý, nếu Shopify và database local lệch nhau thì em coi Shopify là nguồn chính để sửa lại database local.
+
+### “Stale data” là gì?
+
+> Là dữ liệu local chưa kịp cập nhật theo dữ liệu mới nhất. Ví dụ Shopify đã đổi stock từ 10 xuống 5 nhưng database của mình vẫn đang là 10 trong vài phút.
 
 ### Tại sao không gọi Shopify trực tiếp?
 
-> Vì latency cao hơn, phụ thuộc external service và khó kiểm soát rate limit khi traffic tăng. Local database cũng giúp query/filter/report thuận tiện hơn.
+> Vì response sẽ phụ thuộc external API, latency thường cao hơn đọc local database, khó query/report theo nhu cầu riêng và dễ chạm rate limit khi traffic tăng.
 
 ### Nhược điểm của lưu local database?
 
-> Phải giải quyết synchronization, duplicate event, missing webhook và stale data.
-
-### Shopify hay database là source of truth?
-
-> Với dữ liệu Shopify quản lý thì Shopify vẫn là source of truth. Database của em là local representation phục vụ application.
+> Mình phải tự giải quyết chuyện dữ liệu cập nhật chậm, webhook gửi trùng, webhook bị miss và cách kiểm tra lại dữ liệu định kỳ.
 
 ---
 
@@ -36,23 +40,33 @@
 
 ## Bài nói
 
-> Nếu inventory thay đổi liên tục mà hệ thống chỉ sync một lần mỗi ngày thì dữ liệu có thể stale tới gần 24 giờ. Với inventory, khoảng trễ như vậy thường quá lớn.
+> Nếu inventory thay đổi liên tục mà hệ thống chỉ đồng bộ một lần mỗi ngày thì dữ liệu có thể sai gần 24 giờ. Với tồn kho thì khoảng trễ đó thường quá lớn.
 >
-> Em sẽ không giải quyết chỉ bằng cách tăng cron từ một ngày xuống vài phút, vì polling liên tục vừa tốn API quota vừa vẫn có delay.
+> Cách đơn giản là tăng cron lên vài phút một lần, nhưng như vậy hệ thống phải liên tục gọi Shopify kể cả khi không có gì thay đổi, vừa tốn API request vừa vẫn có độ trễ.
 >
-> Hướng tốt hơn là webhook-driven synchronization: khi inventory thay đổi, Shopify gửi webhook và hệ thống cập nhật dữ liệu local. Cron vẫn giữ lại nhưng đóng vai trò reconciliation job để định kỳ kiểm tra và sửa những event bị miss.
+> Vì vậy em ưu tiên webhook cho những thay đổi cần cập nhật nhanh. Khi inventory thay đổi, Shopify chủ động báo cho hệ thống của mình và mình cập nhật database local.
+>
+> Em vẫn giữ một job chạy định kỳ để kiểm tra lại. Lý do là webhook có thể bị lỗi, bị miss hoặc xử lý thất bại. Job này sẽ so sánh lại dữ liệu và sửa những record bị lệch.
+
+### “Reconciliation job” là gì?
+
+> Là job **kiểm tra và sửa lại dữ liệu bị lệch giữa hai hệ thống**. Ví dụ mỗi đêm lấy lại một phần inventory từ Shopify, so với local DB và cập nhật những record không khớp.
 
 ### Tại sao vẫn cần cron nếu đã có webhook?
 
-> Webhook giúp gần real-time nhưng không nên giả định delivery luôn hoàn hảo. Reconciliation job là safety net để hệ thống eventual consistent trở lại.
+> Webhook giúp cập nhật nhanh. Cron kiểm tra lại giúp sửa các trường hợp webhook không tới hoặc xử lý lỗi. Hai cơ chế bổ sung cho nhau.
 
 ### Nếu webhook gửi trùng thì sao?
 
-> Handler cần idempotent. Có thể lưu event identifier hoặc thiết kế update sao cho xử lý cùng event nhiều lần không làm sai state.
+> Em thiết kế handler để cùng một event xử lý lại không tạo kết quả sai. Ví dụ lưu event ID đã xử lý hoặc dùng unique constraint/business key để không tạo record lần hai.
+
+### “Idempotent” là gì?
+
+> Idempotent nghĩa là cùng một operation bị chạy lại nhưng kết quả cuối không bị nhân đôi hoặc sai thêm. Ví dụ cùng webhook `order.created` tới hai lần nhưng hệ thống vẫn chỉ có một order tương ứng.
 
 ### Nếu event đến sai thứ tự?
 
-> Nếu domain nhạy với ordering, em so sánh version/timestamp hoặc fetch lại state hiện tại từ source of truth thay vì áp dụng mù event cũ.
+> Nếu thứ tự ảnh hưởng kết quả, em không áp dụng mù event cũ. Em có thể so sánh thời gian/version hoặc lấy lại trạng thái mới nhất từ Shopify rồi cập nhật theo trạng thái hiện tại.
 
 ---
 
@@ -60,18 +74,30 @@
 
 ## Bài nói
 
-> Khi tích hợp external API em luôn coi failure là trạng thái bình thường cần thiết kế trước. Request có thể timeout, trả 429 hoặc 5xx.
+> Khi tích hợp API bên ngoài, em coi lỗi mạng hoặc lỗi tạm thời là chuyện có thể xảy ra bình thường. Request có thể timeout, bị giới hạn request hoặc phía provider trả lỗi server.
 >
-> Với lỗi transient em retry có giới hạn và dùng exponential backoff. Với rate limit em tôn trọng retry information từ provider nếu có. Với lỗi permanent như invalid input hoặc authentication thì retry liên tục không có ý nghĩa, cần log/alert hoặc đưa job vào trạng thái failed để xử lý.
+> Với lỗi có khả năng hết sau một thời gian, em retry nhưng có giới hạn. Em không retry ngay liên tục mà chờ một khoảng rồi mới thử lại. Nếu lần sau vẫn lỗi thì khoảng chờ có thể tăng dần.
+>
+> Với lỗi do input sai hoặc authentication sai thì retry nhiều lần không giúp gì. Trường hợp đó em log rõ nguyên nhân, cảnh báo nếu cần và đưa job/request về trạng thái failed để xử lý đúng lỗi.
+
+### “Transient error” là gì?
+
+> Là lỗi có khả năng chỉ xảy ra tạm thời, ví dụ timeout mạng hoặc server bên ngoài đang quá tải. Thử lại sau có thể thành công.
+
+### “Backoff” là gì?
+
+> Là khi retry thì không thử lại ngay lập tức. Mình chờ một khoảng rồi mới thử lại, thường các lần sau chờ lâu hơn để tránh tiếp tục gây áp lực lên hệ thống đang lỗi.
 
 ### Retry bao nhiêu lần?
 
-> Không có một con số đúng cho mọi API. Em dựa vào SLA, loại operation và policy của provider. Quan trọng là bounded retry, backoff và observability.
+> Em không dùng một con số cố định cho mọi API. Em dựa vào mức độ quan trọng của operation, policy của provider và thời gian user/job có thể chờ. Quan trọng là retry có giới hạn chứ không lặp vô hạn.
 
 ### Retry POST có nguy hiểm không?
 
-> Có, vì request đầu tiên có thể đã thành công nhưng response bị mất. Với operation tạo resource/payment nên dùng idempotency key hoặc cơ chế deduplication.
+> Có. Request đầu tiên có thể đã thành công ở server nhưng response bị mất trên đường về. Nếu mình gửi lại `create payment` hoặc `create order` một cách mù quáng thì có thể tạo hai record.
+>
+> Với operation kiểu này em dùng idempotency key hoặc business key để server nhận ra đây là cùng một request được gửi lại.
 
 ## Cách nhớ chương
 
-`External API → local DB → webhook → reconciliation → idempotency → retry`
+`Không gọi Shopify mọi lúc → lưu local → webhook cập nhật nhanh → cron kiểm tra lại → tránh duplicate → retry có giới hạn`
