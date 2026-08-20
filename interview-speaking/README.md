@@ -2,17 +2,123 @@
 
 Tài liệu này dùng để **luyện nói phỏng vấn**, không phải để học thuộc định nghĩa.
 
-Mục tiêu là: **nói đơn giản trước, thuật ngữ sau**. Nếu một ý có thể giải thích bằng câu tiếng Việt dễ hiểu thì ưu tiên giải thích trước. Chỉ dùng thuật ngữ kỹ thuật khi nó thực sự giúp câu trả lời chính xác hơn.
+Mục tiêu của bộ này là:
 
-## Cách luyện
+> **Nói đơn giản trước → thuật ngữ sau → ví dụ thực tế → câu hỏi đào sâu.**
 
-Với mỗi chủ đề, hãy luyện theo flow:
+Nếu một ý có thể giải thích bằng tiếng Việt dễ hiểu thì hãy giải thích trước. Sau đó mới gắn tên kỹ thuật để vừa nói tự nhiên, vừa học được thuật ngữ chuyên môn.
 
-> Bối cảnh → Vấn đề → Em kiểm tra gì → Nguyên nhân → Cách xử lý → Tại sao chọn → Đổi lại mất gì → Kết quả → Câu hỏi đào sâu.
+---
 
-Không cần học thuộc từng chữ. Hãy nhớ **ý chính và câu chuyện**.
+# Cách đọc tài liệu
 
-## Nội dung
+Mỗi chương cố gắng dùng cùng một format:
+
+- 💬 **Bài nói** — đoạn có thể luyện nói trực tiếp trong interview.
+- 🧠 **Hiểu sâu** — giải thích tại sao cơ chế đó hoạt động như vậy.
+- 📌 **Ví dụ** — tình huống cụ thể để dễ nhớ.
+- 🎯 **Interviewer hỏi tiếp** — câu hỏi có thể bị đào sâu.
+- ⚠️ **Dễ bị bắt bẻ** — cách nói quá ngắn hoặc dễ tạo câu hỏi khó.
+- ✅ **Cách nói an toàn** — phiên bản rõ hơn, chính xác hơn.
+- 🧾 **Thuật ngữ** — từ chuyên môn kèm nghĩa đơn giản.
+
+Ví dụ:
+
+> **Idempotency** *(cùng một thao tác bị chạy lại nhiều lần nhưng không tạo kết quả sai hoặc bị nhân đôi)*.
+
+Khi thấy thuật ngữ được viết như trên, mục tiêu không phải học thuộc tiếng Anh mà là **hiểu được nghĩa bằng một câu đơn giản**.
+
+---
+
+# Flow trả lời câu hỏi kinh nghiệm
+
+Với câu hỏi kiểu **“Em gặp khó khăn gì trong dự án?”**, luyện theo flow:
+
+> **Bối cảnh → Vấn đề → Em kiểm tra gì → Nguyên nhân → Cách xử lý → Tại sao chọn → Đổi lại mất gì → Kết quả → Cách tránh tái diễn.**
+
+Ví dụ:
+
+> Trong một background job em cần xử lý nhiều shop. Ban đầu em dùng `Promise.all` cho toàn bộ danh sách để job chạy nhanh hơn. Khi số shop tăng, số query database chạy cùng lúc tăng rất mạnh và Prisma bắt đầu timeout khi lấy connection. Em kiểm tra flow của job và connection pool rồi xác định nguyên nhân là số task đồng thời quá lớn. Em chuyển sang giới hạn số shop xử lý cùng lúc. Cách này làm job chậm hơn một chút nhưng database ổn định hơn và giảm timeout.
+
+Đây là kiểu trả lời tốt hơn việc chỉ nói:
+
+> “Em gặp connection pool issue và fix bằng concurrency limit.”
+
+Vì câu thứ hai có quá nhiều thuật ngữ nhưng không cho interviewer thấy **em hiểu nguyên nhân và cách suy nghĩ**.
+
+---
+
+# Nguyên tắc dùng thuật ngữ
+
+## 1. Không tránh thuật ngữ hoàn toàn
+
+Biết thuật ngữ là tốt. Nhưng khi nói ra phải tự giải thích được.
+
+Ví dụ:
+
+> Em dùng **reconciliation job** *(job định kỳ kiểm tra lại hai hệ thống và sửa dữ liệu bị lệch)*.
+
+Thay vì:
+
+> Em dùng reconciliation để đảm bảo eventual consistency.
+
+Câu thứ hai đúng về mặt ý tưởng nhưng chứa hai điểm interviewer có thể hỏi ngược ngay.
+
+## 2. Nói hiện tượng trước, gọi tên sau
+
+Ví dụ với **cache stampede**:
+
+> Khi một cache key hết hạn, có thể hàng trăm request cùng lúc không tìm thấy cache và đều query database. Hiện tượng này thường gọi là **cache stampede**.
+
+Cách này giúp dù quên tên thuật ngữ, bạn vẫn giải thích được vấn đề.
+
+## 3. Không dùng thuật ngữ để “nghe senior”
+
+Nếu từ đó không làm câu trả lời rõ hơn thì bỏ.
+
+Ví dụ:
+
+❌ “Em optimize throughput bằng bounded concurrency để giảm downstream contention.”
+
+✅ “Em giới hạn số shop chạy cùng lúc để database không phải nhận quá nhiều query trong cùng một thời điểm. Nhờ vậy job ổn định hơn.”
+
+Sau đó nếu interviewer hỏi sâu mới dùng các từ **throughput**, **bounded concurrency**, **contention**.
+
+---
+
+# Những thuật ngữ hay bị hỏi lại
+
+| Thuật ngữ | Nghĩa đơn giản |
+|---|---|
+| **Root cause** | Nguyên nhân gốc tạo ra vấn đề, không chỉ biểu hiện bên ngoài |
+| **Latency** | Thời gian từ lúc bắt đầu request/task tới lúc có kết quả |
+| **Throughput** | Số lượng công việc hoàn thành trong một khoảng thời gian |
+| **Source of truth** | Nơi được coi là dữ liệu chính thức khi nhiều hệ thống giữ bản sao |
+| **Stale data** | Dữ liệu local chưa kịp cập nhật theo dữ liệu mới nhất |
+| **Idempotent** | Chạy lại cùng thao tác nhưng không tạo kết quả sai hoặc nhân đôi |
+| **Reconciliation** | Kiểm tra định kỳ và sửa dữ liệu bị lệch giữa hai hệ thống |
+| **Backoff** | Retry nhưng chờ một khoảng rồi mới thử lại, thường tăng dần |
+| **Jitter** | Thêm một khoảng ngẫu nhiên nhỏ vào thời gian retry để các worker không retry cùng lúc |
+| **Connection pool** | Nhóm kết nối database được giữ sẵn để tái sử dụng |
+| **Concurrency** | Nhiều task cùng đang trong quá trình xử lý |
+| **Parallelism** | Nhiều task thực sự chạy cùng một thời điểm trên nhiều execution resource |
+| **Race condition** | Kết quả sai vì nhiều request/task cùng thao tác và thứ tự chạy ảnh hưởng kết quả |
+| **Deadlock** | Hai transaction giữ tài nguyên và chờ lẫn nhau nên không bên nào đi tiếp |
+| **TTL** | Thời gian một cache/key còn hiệu lực trước khi hết hạn |
+| **Backpressure** | Làm phía tạo dữ liệu chậm lại khi phía xử lý không theo kịp |
+| **Stateless** | Một API instance không phụ thuộc vào dữ liệu session chỉ nằm trong memory của chính instance đó |
+
+---
+
+# Công thức 60–90 giây
+
+> Trong dự án em gặp **[vấn đề]**. Ban đầu hệ thống đang **[cách làm]**. Khi **[scale/tình huống]** xảy ra thì em thấy **[biểu hiện]**. Em kiểm tra **[log/metrics/flow]** và xác định nguyên nhân là **[nguyên nhân]**. Em xử lý bằng **[giải pháp]** vì **[lý do]**. Đổi lại **[chi phí/hạn chế]**. Sau đó em kiểm tra lại bằng **[cách verify]** và bổ sung **[cách tránh tái diễn]**.
+
+Không cần học thuộc nguyên đoạn. Chỉ cần nhớ flow.
+
+---
+
+# Nội dung
 
 1. [Giới thiệu bản thân](01-introduction.md)
 2. [Kinh nghiệm dự án Backend / Shopify](02-project-experience.md)
@@ -28,41 +134,14 @@ Không cần học thuộc từng chữ. Hãy nhớ **ý chính và câu chuyệ
 12. [Production Problems & Debugging](12-production-problems.md)
 13. [System Design Speaking Framework](13-system-design.md)
 
-## Nguyên tắc khi trả lời
+---
 
-- **Nói ý đơn giản trước.** Ví dụ thay vì mở đầu bằng “eventual consistency”, hãy nói “dữ liệu local có thể chậm hơn Shopify một khoảng ngắn”, rồi nếu cần mới gọi đó là eventual consistency.
-- Nếu dùng một từ dễ bị hỏi như `idempotency`, `backpressure`, `connection pool`, `reconciliation`, `deadlock`..., phải tự giải thích được bằng **1–2 câu và một ví dụ**.
-- Không dùng thuật ngữ chỉ để câu trả lời nghe “senior” hơn. Thuật ngữ nào không cần thiết thì bỏ.
-- Bắt đầu ngắn, để interviewer hỏi sâu. Nhưng câu đầu phải đủ nghĩa, không phải một chuỗi keyword.
-- Với câu hỏi kinh nghiệm, ưu tiên ví dụ mình thực sự đã làm.
-- Luôn nói được **tại sao**, không chỉ nói đã dùng công nghệ gì.
-- Khi nói `trade-off`, có thể nói tự nhiên hơn là **“đổi lại…”**. Ví dụ: “Cách này ổn định hơn, đổi lại job chạy lâu hơn một chút.”
-- Nếu không nhớ chi tiết implementation, nói rõ hướng tiếp cận thay vì đoán.
-- Khi mô tả sự cố: **biểu hiện → ảnh hưởng → kiểm tra → nguyên nhân → sửa → kiểm tra lại → ngăn tái diễn**.
+# Cách luyện hiệu quả
 
-## Những từ dễ bị hỏi mẹo
+1. Đọc `💬 Bài nói` một lần.
+2. Đóng tài liệu và tự kể lại bằng lời của mình.
+3. Mở phần `🎯 Interviewer hỏi tiếp` và tự trả lời.
+4. Gặp thuật ngữ nào chưa giải thích được thì quay lại `🧾 Thuật ngữ`.
+5. Cuối cùng thử nói lại toàn bộ chủ đề trong 60–90 giây.
 
-Không cần tránh hoàn toàn, nhưng khi nói ra phải biết nghĩa đơn giản:
-
-| Thuật ngữ | Cách nói đơn giản |
-|---|---|
-| Root cause | Nguyên nhân gốc gây ra vấn đề, không chỉ biểu hiện bên ngoài |
-| Latency | Thời gian từ lúc bắt đầu request/task đến lúc nhận kết quả |
-| Throughput | Số lượng công việc xử lý được trong một khoảng thời gian |
-| Source of truth | Nơi được coi là dữ liệu chính thức khi hai hệ thống khác nhau |
-| Stale data | Dữ liệu local chưa kịp cập nhật theo nguồn mới nhất |
-| Idempotent | Chạy lại cùng một thao tác nhưng không tạo kết quả sai hoặc bị nhân đôi |
-| Reconciliation | Job định kỳ kiểm tra và sửa dữ liệu bị lệch giữa hai hệ thống |
-| Backoff | Khi retry thì chờ một khoảng rồi mới thử lại, thường tăng dần |
-| Jitter | Thêm một khoảng ngẫu nhiên nhỏ vào thời gian retry để nhiều worker không retry cùng lúc |
-| Connection pool | Một nhóm kết nối DB được tái sử dụng; hết connection thì query mới phải chờ |
-| Concurrency | Nhiều task cùng đang trong quá trình xử lý |
-| Race condition | Kết quả bị sai do nhiều request/task cùng sửa dữ liệu và thứ tự chạy ảnh hưởng kết quả |
-| Deadlock | Hai transaction giữ resource và chờ lẫn nhau nên không bên nào đi tiếp được |
-| TTL | Thời gian một cache/key còn hiệu lực trước khi hết hạn |
-
-## Công thức 60–90 giây
-
-> Trong dự án em gặp [vấn đề]. Ban đầu hệ thống đang [cách làm hiện tại]. Khi [số lượng/traffic/tình huống] tăng thì em thấy [biểu hiện]. Em kiểm tra [log/metrics/flow] và xác định nguyên nhân là [nguyên nhân]. Em xử lý bằng [giải pháp]. Em chọn cách này vì [lý do]. Đổi lại [chi phí/hạn chế]. Sau đó em kiểm tra lại bằng [cách verify] và bổ sung [cách ngăn tái diễn].
-
-Đây là khung có thể áp dụng cho gần như mọi câu hỏi “Em đã gặp khó khăn gì trong dự án?”.
+Mục tiêu cuối cùng không phải nói giống hệt tài liệu. Mục tiêu là **hiểu đủ để dùng từ của chính mình**.
