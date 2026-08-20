@@ -4,46 +4,88 @@
 
 ## Bài nói
 
-> Một case em từng gặp là upload file lớn qua backend. Khi file khoảng hàng trăm MB, request có thể gặp `413 Request Entity Too Large`, timeout hoặc làm application server tiêu tốn nhiều memory/bandwidth.
+> Một case em từng gặp là upload file lớn qua backend. Khi file lên tới hàng trăm MB, request có thể bị `413 Request Entity Too Large`, timeout hoặc làm application server phải nhận và chuyển tiếp toàn bộ file nên tốn bandwidth và resource.
 >
-> Nếu flow là client → Node server → S3 thì backend trở thành middleman cho toàn bộ bytes. Với file lớn em ưu tiên để backend authenticate/authorize rồi tạo presigned URL, sau đó client upload trực tiếp lên S3.
+> Nếu flow là client → Node server → S3 thì backend trở thành điểm trung gian cho toàn bộ dữ liệu file. Với file lớn, em ưu tiên để backend chỉ kiểm tra user có quyền upload hay không rồi tạo một URL tạm thời cho phép client upload trực tiếp lên S3.
 >
-> Như vậy backend vẫn kiểm soát quyền upload nhưng data path không phải đi qua Node server. Với file rất lớn hoặc network không ổn định, multipart upload giúp chia file thành nhiều part và retry riêng từng part.
+> Cách này giúp dữ liệu file không phải đi xuyên qua Node server. Backend vẫn kiểm soát quyền cấp upload, nhưng phần bytes đi thẳng từ client lên S3.
+>
+> Với file rất lớn hoặc mạng không ổn định, em cân nhắc multipart upload để chia file thành nhiều phần nhỏ hơn. Nếu một part lỗi thì retry part đó thay vì upload lại toàn bộ file.
 
 ---
 
 # Interviewer đào sâu
 
-### Presigned URL có an toàn không?
+### Presigned URL là gì?
 
-> URL có quyền tạm thời nên cần expiration ngắn hợp lý, giới hạn operation/object key và validate user trước khi cấp URL. Không coi URL là public credential lâu dài.
+> Là URL được backend tạo ra để cấp quyền tạm thời cho một operation cụ thể trên S3, ví dụ upload một object vào một key nhất định. Client dùng URL đó trong thời gian giới hạn mà không cần biết AWS secret key.
+
+### Vì sao presigned URL an toàn hơn việc gửi AWS key cho client?
+
+> Vì client chỉ nhận quyền tạm thời cho operation đã được ký sẵn. AWS secret key vẫn nằm ở server. Em vẫn phải giới hạn thời gian sống của URL, object key và chỉ cấp URL sau khi đã kiểm tra quyền của user.
+
+### `413 Request Entity Too Large` nghĩa là gì?
+
+> Nghĩa là một layer nhận request, thường là proxy hoặc application server, từ chối vì request body lớn hơn giới hạn cấu hình. Với Nginx em sẽ kiểm tra `client_max_body_size`.
+
+### Timeout là gì trong case upload?
+
+> Là một layer chờ quá lâu mà request chưa hoàn thành nên chủ động đóng request. Em cần xác định timeout nằm ở client, Nginx, Node hay service/storage phía sau chứ không tăng mọi timeout một cách mù quáng.
+
+### Multipart upload là gì?
+
+> Là chia một file lớn thành nhiều part rồi upload từng part lên S3. Khi tất cả part thành công thì hoàn tất upload. Lợi ích là retry riêng part bị lỗi và có thể upload nhiều part song song với mức concurrency phù hợp.
 
 ### Làm sao biết upload đã xong?
 
-> Tùy flow, client có thể gọi API complete/confirm sau upload, backend verify object metadata/head request, hoặc dùng S3 event để trigger processing.
+> Có vài cách tùy flow. Client có thể gọi API `complete/confirm` sau khi upload. Backend có thể kiểm tra object đã tồn tại và metadata phù hợp bằng S3 API. Hoặc hệ thống có thể dùng S3 event để báo khi object được tạo.
 
-### Nếu upload qua Nginx bị 413?
+### Metadata là gì?
 
-> Kiểm tra `client_max_body_size` và các proxy/body timeout. Nhưng nếu kiến trúc cho phép direct-to-S3 thì em ưu tiên giảm việc proxy large payload qua application server thay vì chỉ tăng limit mãi.
+> Là thông tin mô tả object ngoài nội dung file, ví dụ kích thước, content type, key, thời gian upload hoặc custom metadata mình lưu kèm.
 
-### Multipart upload lợi gì?
+### Nếu upload S3 xong nhưng DB chưa lưu metadata thì sao?
 
-> Retry từng part, upload song song có kiểm soát và resume tốt hơn so với phải upload lại toàn bộ file.
+> Đây là tình huống hai hệ thống cập nhật không cùng lúc. S3 đã có file nhưng database chưa có record tương ứng.
+>
+> Em có thể upload file vào trạng thái/key tạm, sau đó chỉ đánh dấu hoàn tất khi backend xác nhận cả S3 và DB đã đúng. Ngoài ra có thể có cleanup job để xóa những file đã upload nhưng không bao giờ được hoàn tất.
 
-### File upload xong nhưng DB chưa lưu metadata?
+### “Distributed consistency problem” là gì?
 
-> Đây là distributed consistency problem. Có thể upload vào temporary key/status rồi confirm/finalize, có cleanup job cho orphan objects và thiết kế operation idempotent.
+> Nếu dùng từ này, em muốn nói **một nghiệp vụ đi qua nhiều hệ thống nhưng không có một transaction chung để rollback tất cả cùng lúc**. Trong ví dụ này, database rollback không thể tự xóa file đã upload lên S3.
+
+### Orphan object là gì?
+
+> Là file/object còn nằm trong S3 nhưng không còn record hợp lệ trong hệ thống để tham chiếu tới nó. Cleanup job có thể tìm và xóa những object kiểu này theo rule an toàn.
+
+---
+
+# Tại sao không chỉ tăng Nginx limit?
+
+> Nếu hệ thống vẫn cần upload qua backend thì em phải cấu hình đúng `client_max_body_size` và timeout. Nhưng nếu business cho phép direct upload thì chỉ tăng limit chưa giải quyết việc backend vẫn phải chuyển tiếp hàng trăm MB cho mỗi request.
+>
+> Em ưu tiên sửa flow để application server không nằm trong đường truyền file lớn nếu nó không cần xử lý bytes đó.
 
 ---
 
 # STAR version
 
-**Situation:** File lớn upload qua application/Nginx gặp size limit và timeout.
+**Situation**
 
-**Action:** Kiểm tra proxy limits nhưng chuyển data path sang presigned direct upload khi phù hợp; dùng multipart cho file lớn.
+> File lớn upload qua application/Nginx bị giới hạn kích thước hoặc timeout.
 
-**Result:** Giảm tải application server và làm retry/resume dễ hơn.
+**Task**
+
+> Cho phép upload ổn định mà không làm Node server phải gánh toàn bộ file.
+
+**Action**
+
+> Em kiểm tra giới hạn Nginx/server, sau đó với flow phù hợp em chuyển sang backend cấp presigned URL để client upload thẳng S3. Với file lớn em cân nhắc multipart upload để retry từng phần.
+
+**Result**
+
+> Giảm bandwidth/resource đi qua application server và việc retry file lớn linh hoạt hơn.
 
 ## Cách nhớ
 
-`Client → backend auth → presigned URL → direct S3 → verify → cleanup`
+`Client xin quyền → backend kiểm tra → cấp URL tạm → client upload thẳng S3 → backend xác nhận → cleanup file không hoàn tất`
