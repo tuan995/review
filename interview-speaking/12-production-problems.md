@@ -1,143 +1,297 @@
 # 12 — Production Problems & Debugging
 
-# Cách trả lời câu “Em từng gặp vấn đề production nào?”
-
-Khi được hỏi, em không bắt đầu ngay bằng solution. Em đi theo flow:
-
-> Biểu hiện → Ảnh hưởng → Em kiểm tra gì → Nguyên nhân → Cách sửa → Kiểm tra lại → Cách tránh lặp lại
-
-Nếu interviewer dùng từ `incident`, em hiểu đơn giản là **một sự cố thực tế xảy ra trên môi trường đang phục vụ user/job thật**.
+Mục tiêu: khi interviewer hỏi **“Em từng gặp sự cố gì?”**, trả lời theo cách cho thấy quá trình điều tra chứ không chỉ nói tên lỗi và solution.
 
 ---
 
-# Case 1 — Prisma connection pool timeout
+# 1. Framework trả lời incident
 
-## Bài nói
+Dùng flow:
 
-> Trong một scheduled job, Prisma bắt đầu báo timeout khi lấy database connection. Ban đầu em kiểm tra xem database có bị down hay query nào đặc biệt chậm không.
->
-> Sau đó em xem flow của job và thấy job dùng `Promise.all` để xử lý nhiều shop cùng lúc. Mỗi shop lại tạo nhiều query nên tổng số query đồng thời tăng rất nhanh.
->
-> Database connection pool có giới hạn. Khi tất cả connection đang bận, query mới phải chờ. Chờ quá lâu thì Prisma báo timeout.
->
-> Em xử lý bằng cách giới hạn số shop chạy đồng thời thay vì start toàn bộ một lúc. Sau đó em theo dõi lại số lỗi và thời gian xử lý để kiểm tra hệ thống đã ổn định hơn chưa.
+> **Biểu hiện → Ảnh hưởng → Em kiểm tra gì → Nguyên nhân → Cách sửa → Kiểm tra lại → Cách tránh tái diễn.**
 
-### Root cause là gì trong case này?
+## 🧾 Thuật ngữ
 
-> Root cause là **job tạo quá nhiều query cùng lúc so với khả năng connection pool/database chịu được**. Prisma timeout chỉ là biểu hiện nhìn thấy bên ngoài.
+### **Symptom / Biểu hiện** *(thứ mình nhìn thấy bên ngoài)*
 
-### Tại sao không chỉ tăng pool?
+Ví dụ Prisma connection timeout.
 
-> Nếu database còn capacity thì có thể tune pool. Nhưng nếu application vẫn tạo workload không giới hạn thì tăng pool chỉ đẩy điểm lỗi ra xa hơn. Em ưu tiên kiểm soát số task đồng thời trước rồi mới tune pool bằng metrics.
+### **Impact / Ảnh hưởng** *(người dùng hoặc hệ thống bị ảnh hưởng thế nào)*
 
-### Prevention là gì?
+Ví dụ job không đồng bộ đủ shop.
 
-> Là những thay đổi giúp lỗi khó tái diễn: giới hạn concurrency, theo dõi query/connection usage, load test job và tránh `Promise.all` không giới hạn trên input lớn.
+### **Root cause / Nguyên nhân gốc** *(nguyên nhân tạo ra biểu hiện, không chỉ tên error)*
 
----
+Ví dụ `Promise.all` start quá nhiều query làm connection pool cạn.
 
-# Case 2 — Nginx 413 / upload timeout
+### **Verification** *(kiểm tra sau fix xem vấn đề thật sự được giải quyết chưa)*
 
-## Bài nói
-
-> Khi upload file lớn, request bị 413 hoặc timeout. Em không sửa ngay một config ngẫu nhiên mà đi theo đường request: client → Nginx → Node → storage.
->
-> Với 413, em kiểm tra giới hạn request body ở Nginx/application. Với timeout, em xác định layer nào là bên đóng request vì chờ quá lâu.
->
-> Nếu file cuối cùng được lưu ở S3 và backend không cần xử lý bytes, em ưu tiên flow client upload thẳng S3 bằng presigned URL thay vì để Node server chuyển tiếp toàn bộ file.
-
-### “Layer” nghĩa là gì?
-
-> Là từng thành phần request đi qua. Ví dụ browser là một layer, Nginx là một layer, Node application là một layer và S3 là một layer. Xác định đúng layer lỗi giúp mình không sửa sai chỗ.
-
-### Bottleneck là gì?
-
-> Là điểm giới hạn làm toàn flow chậm hoặc không scale được. Ví dụ nếu mọi file 500 MB đều phải đi qua Node server thì bandwidth của application server có thể trở thành bottleneck.
+### **Prevention** *(biện pháp giảm khả năng lỗi tương tự quay lại)*
 
 ---
 
-# Case 3 — Cron chạy nhiều lần
+# 2. Case 1 — Prisma Connection Pool Timeout
 
-## Bài nói
+## 💬 Bài nói 60–90 giây
 
-> Khi application scale thành nhiều process hoặc instance, mỗi instance có thể cùng register một cron giống nhau. Một lịch chạy nhưng thực tế job lại chạy nhiều lần.
+> Trong một scheduled job em gặp Prisma timeout khi lấy database connection. Ban đầu error nhìn giống vấn đề database, nhưng em kiểm tra flow của job trước.
 >
-> Nếu job không chịu được việc chạy trùng thì có thể tạo duplicate data hoặc gọi external API nhiều lần.
+> Job đang dùng `Promise.all` để xử lý nhiều shop cùng lúc. Mỗi shop lại tạo nhiều query, nên số query active tăng rất nhanh. Connection pool có giới hạn; khi tất cả connection đang bận, query mới phải chờ và cuối cùng timeout.
 >
-> Em sẽ đảm bảo chỉ có một scheduler phù hợp hoặc dùng một cơ chế coordination chung. Đồng thời bản thân job cũng nên được thiết kế để nếu lỡ chạy lại thì không làm dữ liệu sai.
+> Em chuyển sang giới hạn số shop được xử lý đồng thời thay vì start toàn bộ danh sách. Sau đó em theo dõi lại error rate, processing time và database usage để chắc timeout giảm mà job vẫn đạt tốc độ chấp nhận được.
+>
+> Bài học của em là không chỉ tăng connection pool ngay. Trước tiên cần kiểm soát workload mà application đang tạo ra.
 
-### Coordination là gì?
+## 🎯 Interviewer hỏi tiếp
 
-> Ở đây coordination chỉ là cách nhiều instance thống nhất “ai được chạy job này”. Ví dụ dùng một scheduler riêng, queue hoặc lock chung tùy hệ thống.
+### Làm sao biết root cause là concurrency chứ không phải query chậm?
+
+> Em nhìn timing của lỗi, flow của scheduled job, số task được start cùng lúc và connection usage. Nếu cần em xem query latency/execution plan để tách hai khả năng. Em không chỉ dựa vào một error message.
+
+### Nếu query thực sự chậm thì sao?
+
+> Khi đó concurrency limit chỉ giảm áp lực chứ chưa giải quyết nguyên nhân query. Em tiếp tục xem execution plan, index, data size và query pattern.
 
 ---
 
-# Case 4 — External API timeout / 429
+# 3. Case 2 — Nginx 413 / Upload Timeout
 
-## Bài nói
+## 💬 Bài nói
 
-> Khi external API lỗi, em phân loại lỗi trước thay vì retry mọi thứ.
+> Khi upload file lớn, em từng gặp 413 hoặc timeout. Em tách request path thành client → Nginx → Node → storage để xác định layer nào đang từ chối hoặc chờ quá lâu.
 >
-> Timeout, 429 hoặc một số lỗi server có thể chỉ là tạm thời nên retry sau một khoảng có thể hợp lý. Nhưng input sai hoặc authentication sai thì retry y nguyên thường không giúp gì.
+> Với 413 em kiểm tra request body limit như `client_max_body_size`. Với timeout em xem loại timeout ở từng layer.
 >
-> Với 429, em đọc thông tin rate limit mà provider trả về và giảm tốc độ request. Với job lớn em dùng queue hoặc concurrency limit để tránh dồn request cùng lúc.
+> Tuy nhiên nếu mục tiêu cuối chỉ là lưu file lên S3 thì thay vì tăng limit mãi, em ưu tiên direct upload bằng presigned URL để file không phải đi qua Node server.
+
+### **Layer** *(một tầng trong request flow)*
+
+### **Bottleneck** *(thành phần giới hạn tốc độ/khả năng của toàn flow)*
+
+⚠️ **Dễ bị bắt bẻ:**
+
+> “413 là do Nginx.”
+
+✅ **Cách nói an toàn:**
+
+> Nginx là một khả năng phổ biến nếu request đi qua Nginx, nhưng em kiểm tra layer thực tế vì application/proxy khác cũng có thể có body limit.
 
 ---
 
-# Cách tìm nguyên nhân
+# 4. Case 3 — Cron chạy nhiều lần
 
-### Em bắt đầu từ đâu?
+## 💬 Bài nói
 
-> Em bắt đầu từ thời điểm lỗi xảy ra và bằng chứng có sẵn: log, metrics, error message, latency, trạng thái DB/API và deploy gần thời điểm đó.
+> Khi application chạy nhiều process hoặc container, nếu mỗi instance đều register cùng cron thì cùng một scheduled job có thể được trigger nhiều lần.
 >
-> Sau đó em thu hẹp dần theo từng layer. Ví dụ lỗi request thì xem client/proxy/app/database thay vì cùng lúc thay đổi nhiều thứ.
+> Nếu job có side effect và không chịu được duplicate thì có thể tạo dữ liệu lặp hoặc gọi external API nhiều lần.
+>
+> Em có thể giải quyết bằng scheduler riêng, distributed coordination hoặc unique job trong queue tùy architecture. Đồng thời em vẫn cố thiết kế job idempotent để duplicate không làm sai dữ liệu.
 
-### Evidence là gì?
+### **Side effect** *(operation thay đổi trạng thái, ví dụ tạo record hoặc gọi payment API)*
 
-> Là dữ liệu giúp chứng minh hoặc bác bỏ một giả thuyết, ví dụ log cho thấy connection timeout tăng đúng lúc cron start, hoặc metrics cho thấy active DB connections chạm ngưỡng tối đa.
-
-### Hypothesis là gì?
-
-> Là giả thuyết cần kiểm tra. Ví dụ “có thể database chậm” chỉ là hypothesis. Em cần log/metrics hoặc test để xác nhận chứ không coi đó là kết luận ngay.
-
-### Metrics là gì?
-
-> Là các số liệu theo dõi hệ thống theo thời gian, ví dụ request latency, error rate, số connection đang dùng, CPU, memory hoặc queue size.
-
-### Correlation ID là gì?
-
-> Là một ID đi theo cùng một request hoặc flow qua nhiều bước/service để mình tìm các log liên quan dễ hơn. Nếu hệ thống chưa có tracing đầy đủ thì correlation ID vẫn rất hữu ích.
-
-### Tracing là gì?
-
-> Là cách theo dõi một request đi qua nhiều service/operation và mất thời gian ở đâu. Khi phỏng vấn nếu chưa triển khai sâu, em chỉ cần nói đúng mục đích này thay vì cố kể tool mình chưa dùng.
+### **Distributed coordination** *(cơ chế nhiều process/server thống nhất ai được thực hiện một việc)*
 
 ---
 
-# Fix xong chưa phải là hết
+# 5. Case 4 — External API Timeout / 429
 
-### Em kiểm tra fix thế nào?
+## 💬 Bài nói
 
-> Em xem lại error rate, latency hoặc metric liên quan; chạy lại case đã gây lỗi nếu an toàn; và kiểm tra log để chắc flow mới hoạt động như mong đợi.
+> Khi external API fail em phân loại lỗi trước. Timeout, 429 hoặc một số 5xx có thể là lỗi tạm thời nên có retry policy. Validation hoặc authentication sai thì retry cùng request thường không giúp.
+>
+> Với 429 em tôn trọng metadata của provider nếu có và giảm request pressure bằng limiter, queue hoặc cache tùy flow.
 
-### Alert là gì?
+### **Retry policy** *(quy tắc lỗi nào retry, chờ bao lâu, tối đa bao nhiêu lần)*
 
-> Là cảnh báo khi một metric hoặc điều kiện vượt ngưỡng để team biết sớm. Ví dụ tỷ lệ 5xx tăng mạnh hoặc queue backlog tăng liên tục.
-
-### Runbook là gì?
-
-> Là tài liệu ngắn hướng dẫn khi một loại sự cố xảy ra thì nên kiểm tra gì và xử lý bước đầu thế nào. Nếu chưa từng dùng runbook trong dự án thì không cần chủ động nhắc từ này khi phỏng vấn.
+### **Request pressure** *(mức tải application đang tạo lên dependency)*
 
 ---
 
-# Câu trả lời mẫu 60–90 giây
+# 6. Case 5 — Memory tăng dần
 
-> Một vấn đề em từng gặp là Prisma timeout khi scheduled job chạy. Em kiểm tra log và flow của job, sau đó thấy `Promise.all` đang start xử lý nhiều shop cùng lúc, mỗi shop lại tạo nhiều database query.
+## 💬 Bài nói
+
+> Nếu Node process dùng memory tăng dần, em không restart rồi kết luận đã fix. Em xem traffic có tăng tương ứng không, heap usage có giảm sau GC không và object nào đang bị giữ lại.
 >
-> Khi số query tăng nhanh, toàn bộ connection trong pool bị sử dụng và query mới phải chờ đến timeout. Em chuyển sang giới hạn số shop được xử lý đồng thời rồi theo dõi lại error rate và thời gian job.
->
-> Sau thay đổi, database ổn định hơn. Bài học của em là khi debug production cần tìm nguyên nhân gốc và kiểm tra capacity của cả hệ thống phía dưới, không chỉ nhìn error message ở application.
+> Những nguyên nhân em nghĩ tới gồm cache không giới hạn, global Map/array, listener không cleanup, timer hoặc closure giữ object lớn. Nếu cần em dùng heap snapshot để so sánh retained objects.
 
-## Cách nhớ
+### **Heap** *(vùng memory runtime dùng để lưu nhiều JavaScript object)*
 
-`Thấy lỗi → xem ảnh hưởng → lấy log/metrics → đưa giả thuyết → kiểm tra → tìm nguyên nhân → sửa → đo lại → tránh tái diễn`
+### **Heap snapshot** *(ảnh chụp trạng thái object trong heap để phân tích object nào đang chiếm/giữ memory)*
+
+### **Memory leak** *(memory không được giải phóng dù dữ liệu đó không còn cần cho business)*
+
+⚠️ Memory cao không tự động là memory leak.
+
+---
+
+# 7. Cách điều tra production issue
+
+## Bước 1 — Xác định thời điểm
+
+- bắt đầu lúc nào;
+- có deploy/config change gần đó không;
+- tất cả user hay một nhóm;
+- xảy ra liên tục hay theo cron/traffic spike.
+
+### **Timeline** *(trình tự thời gian của các sự kiện quanh incident)*
+
+## Bước 2 — Thu thập evidence
+
+- logs;
+- metrics;
+- error rate;
+- latency;
+- CPU/memory;
+- DB connection/query;
+- external API status.
+
+### **Evidence** *(dữ liệu quan sát được dùng để kiểm chứng giả thuyết)*
+
+## Bước 3 — Thu hẹp layer
+
+Ví dụ:
+
+```text
+Client
+  ↓
+Nginx
+  ↓
+Node API
+  ↓
+Database / Redis / External API
+```
+
+Xác định request tới đâu thì bắt đầu lỗi.
+
+## Bước 4 — Đưa ra hypothesis
+
+### **Hypothesis** *(giả thuyết có thể kiểm chứng về nguyên nhân)*
+
+Ví dụ:
+
+> “Có thể job mới deploy làm connection pool cạn.”
+
+Sau đó tìm metrics/log để chứng minh hoặc loại bỏ.
+
+---
+
+# 8. Logs nên có gì?
+
+## 💬 Cách nói
+
+> Em muốn log đủ context để nối các bước của một request/job: request ID hoặc job ID, operation, duration, result/error category và business identifier cần thiết. Nhưng em tránh log secret/token hoặc sensitive data.
+
+### **Correlation ID** *(ID chung giúp nối log của cùng một request/workflow qua nhiều component)*
+
+### **Structured log** *(log theo field như JSON thay vì chỉ một chuỗi text khó query)*
+
+Ví dụ:
+
+```json
+{
+  "jobId": "sync_123",
+  "shop": "abc.myshopify.com",
+  "durationMs": 843,
+  "status": "failed",
+  "errorType": "db_connection_timeout"
+}
+```
+
+---
+
+# 9. Metrics vs Logs
+
+### **Logs**
+
+Tốt để xem chi tiết một event/request cụ thể.
+
+### **Metrics**
+
+Tốt để biết xu hướng toàn hệ thống theo thời gian.
+
+📌 Ví dụ metric:
+
+- request count;
+- error rate;
+- p95 latency;
+- DB connections;
+- queue depth.
+
+### **p95 latency** *(95% request có latency nhỏ hơn hoặc bằng giá trị này; 5% chậm hơn)*
+
+⚠️ Average latency có thể che những request rất chậm.
+
+---
+
+# 10. Alert
+
+## **Alert** *(cảnh báo khi metric/log vượt điều kiện cần chú ý)*
+
+Alert tốt nên liên quan tới impact, không phải mọi warning đều page người trực.
+
+Ví dụ:
+
+- error rate tăng mạnh;
+- queue oldest job > 30 phút;
+- DB connection saturation kéo dài.
+
+### **Saturation** *(resource gần hoặc đã dùng hết capacity)*
+
+---
+
+# 11. Fix xong chưa phải kết thúc
+
+Sau fix:
+
+1. verify error giảm;
+2. kiểm tra side effect;
+3. thêm metric/alert nếu trước đó thiếu;
+4. thêm test/load test khi phù hợp;
+5. ghi lại runbook hoặc note cho team.
+
+### **Runbook** *(hướng dẫn thực tế để điều tra/xử lý một loại incident)*
+
+---
+
+# 🎯 Interviewer hỏi tiếp
+
+### Nếu chưa tìm được root cause thì nói sao?
+
+> Em nói rõ các hypothesis và thứ tự kiểm chứng. Em không đoán một solution rồi khẳng định đó là nguyên nhân khi chưa có evidence.
+
+### Rollback deploy hay debug trước?
+
+> Nếu impact lớn và deploy mới có khả năng cao liên quan, rollback có thể là bước giảm impact nhanh. Sau khi ổn định mới điều tra root cause sâu hơn. Quyết định tùy mức độ rủi ro và khả năng rollback.
+
+### Monitoring và observability khác nhau sao?
+
+> Monitoring thường tập trung vào metric/cảnh báo đã biết trước. Observability rộng hơn: dùng logs, metrics, traces để hiểu cả những failure mode mình chưa dự đoán cụ thể.
+
+### Trace là gì?
+
+> Trace theo dõi một request đi qua nhiều service/span để biết thời gian nằm ở đâu. Với distributed system nó giúp tìm component nào chậm.
+
+---
+
+# ⚠️ Những câu dễ bị bắt bẻ
+
+❌ “Em nhìn log và tìm ra lỗi.”  
+✅ “Em xác định timeline, xem log/metrics rồi kiểm chứng từng giả thuyết để thu hẹp root cause.”
+
+❌ “Fix bằng restart server.”  
+✅ “Restart có thể giảm symptom tạm thời; em vẫn cần tìm nguyên nhân nếu memory/resource tiếp tục tăng.”
+
+❌ “Tăng timeout để fix timeout.”  
+✅ “Em xác định operation đang chậm ở đâu; tăng timeout chỉ đúng nếu thời gian xử lý dài là hợp lệ và resource vẫn chịu được.”
+
+---
+
+# 📌 Công thức kể incident
+
+> Em thấy **[symptom]**, ảnh hưởng **[impact]**. Em kiểm tra **[evidence]** và thu hẹp xuống **[layer]**. Nguyên nhân là **[root cause]**. Em sửa bằng **[fix]**, sau đó verify bằng **[metric/test]** và thêm **[prevention]**.
+
+# Cách nhớ
+
+**Thấy lỗi → đo → xác định layer → hypothesis → evidence → root cause → fix → verify → prevent**
