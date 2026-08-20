@@ -1,114 +1,221 @@
 # 09 — Redis & Caching
 
-# 1. Khi nào em dùng Redis?
+Mục tiêu: hiểu Redis/cache từ **vấn đề cần giải quyết**, không trả lời theo kiểu “Redis nhanh nên dùng Redis”.
 
-## Bài nói
+---
 
-> Em dùng Redis khi cần lưu dữ liệu truy cập nhanh hoặc dữ liệu chỉ cần tồn tại trong một khoảng thời gian, ví dụ cache, trạng thái tạm thời, giới hạn request hoặc một số cơ chế coordination giữa nhiều instance.
+# 1. Redis là gì và khi nào dùng?
+
+## 💬 Bài nói
+
+> Redis là một in-memory data store, tức là dữ liệu chủ yếu được truy cập từ memory nên tốc độ rất nhanh. Em thường dùng Redis cho những dữ liệu tạm hoặc cần truy cập nhanh như cache, temporary state, rate limiting hoặc một số coordination use case.
 >
-> Nhưng em không thêm Redis chỉ vì Redis nhanh. Đầu tiên em kiểm tra bottleneck thật sự nằm ở đâu. Nếu database đã đủ nhanh hoặc dữ liệu thay đổi liên tục và rất khó cache đúng thì thêm cache có thể làm hệ thống phức tạp hơn mà lợi ích không nhiều.
+> Tuy nhiên em không thêm Redis chỉ vì nó nhanh. Em xem bottleneck có thật sự nằm ở database/external API không, dữ liệu có chấp nhận cũ trong một khoảng thời gian không và nếu Redis bị lỗi thì hệ thống nên phản ứng thế nào.
 
-### Cache là gì?
+---
 
-> Cache là nơi giữ tạm một bản dữ liệu để lần sau đọc nhanh hơn hoặc tránh phải gọi lại database/external API. Dữ liệu gốc vẫn thường nằm ở database hoặc hệ thống chính.
+# 🧾 Thuật ngữ
 
-### TTL là gì?
+### **In-memory** *(dữ liệu chủ yếu nằm trong RAM để truy cập nhanh)*
 
-> TTL là thời gian một key được giữ trước khi tự hết hạn. Ví dụ cache product trong 5 phút thì sau 5 phút Redis có thể xóa key đó và request sau phải lấy lại dữ liệu mới.
+### **Cache** *(bản dữ liệu tạm giúp tránh phải đọc nguồn chậm hơn nhiều lần)*
+
+### **TTL — Time To Live** *(thời gian key còn tồn tại trước khi tự hết hạn)*
+
+### **Bottleneck** *(thành phần đang giới hạn performance của toàn flow)*
 
 ---
 
 # 2. Cache-aside
 
-## Bài nói
+## **Cache-aside** *(application tự đọc cache trước; nếu không có thì đọc DB rồi ghi lại cache)*
 
-> Cách em thường dùng là application đọc Redis trước. Nếu Redis có dữ liệu thì trả luôn. Nếu không có thì đọc database, sau đó lưu kết quả vào Redis để những lần đọc tiếp theo nhanh hơn.
->
-> Khi dữ liệu trong database thay đổi, em cần xóa hoặc cập nhật cache để tránh user tiếp tục đọc dữ liệu cũ.
+## 📌 Flow
 
 ```text
 Request
-   |
-   v
-Redis có dữ liệu? ---- có ----> trả kết quả
-   |
-  không
-   v
-Database → lưu lại Redis → trả kết quả
+   ↓
+Redis
+ ├─ hit → trả dữ liệu
+ └─ miss
+      ↓
+   Database
+      ↓
+   set Redis
+      ↓
+   trả dữ liệu
 ```
 
-### Cache-aside là gì?
+## 💬 Bài nói
 
-> Là pattern mà application tự chịu trách nhiệm đọc cache trước, cache miss thì đọc source chính rồi tự ghi lại cache. Khi phỏng vấn có thể nói flow ở trên trước, sau đó mới gọi tên là cache-aside.
+> Pattern em thường dùng là cache-aside. Application đọc Redis trước. Nếu có dữ liệu thì trả luôn. Nếu không có thì đọc database, sau đó lưu kết quả vào Redis với TTL để lần sau đọc nhanh hơn.
+>
+> Khi dữ liệu gốc thay đổi, em cần quyết định update cache hay xóa cache để lần đọc sau rebuild lại.
 
-### Cache miss/hit là gì?
+### **Cache hit** *(tìm thấy dữ liệu trong cache)*
 
-> Cache hit là tìm thấy dữ liệu trong cache. Cache miss là không tìm thấy nên phải lấy từ database hoặc nguồn khác.
+### **Cache miss** *(không tìm thấy dữ liệu trong cache nên phải đọc nguồn gốc)*
 
 ---
 
 # 3. Cache invalidation
 
-> Phần khó nhất của cache thường không phải đọc mà là **khi nào xóa hoặc cập nhật dữ liệu cũ**.
->
-> Ví dụ product price vừa đổi trong database nhưng Redis vẫn giữ giá cũ. Em có thể xóa cache ngay sau khi update DB, cập nhật lại cache hoặc dùng TTL như một lớp an toàn để dữ liệu cũ không tồn tại mãi.
+## **Cache invalidation** *(làm cache cũ mất hiệu lực khi dữ liệu gốc thay đổi)*
 
-### Invalidation là gì?
+Có vài cách phổ biến:
 
-> Là làm cho cache cũ không còn được dùng nữa, thường bằng cách xóa key hoặc thay bằng dữ liệu mới.
+- xóa key sau khi database update;
+- update lại cache;
+- dùng TTL để cache tự hết hạn;
+- kết hợp nhiều cách tùy consistency requirement.
 
-### Chọn TTL bao nhiêu?
+## 💬 Cách nói
 
-> Không có một con số đúng cho mọi dữ liệu. Em nhìn mức độ user có thể chấp nhận dữ liệu cũ trong bao lâu, dữ liệu được đọc nhiều đến đâu và chi phí để lấy lại dữ liệu từ source chính.
+> Phần khó của cache không phải đọc nhanh mà là giữ cache không sai quá lâu. Nếu business cần dữ liệu khá mới, em thường invalidation khi write và vẫn có TTL như một safety net.
 
----
-
-# 4. Nhiều request cùng cache miss
-
-> Một tình huống dễ gặp là một key được đọc rất nhiều vừa hết hạn. Hàng trăm request cùng lúc không thấy cache và cùng query database. Database có thể bị một đợt tải lớn dù bình thường cache giúp giảm tải.
-
-### Cache stampede là gì?
-
-> Đó chính là tình huống nhiều request cùng cache miss và cùng đổ xuống database/source phía dưới. Khi nói phỏng vấn em có thể nói thẳng hiện tượng trước, không nhất thiết phải mở đầu bằng thuật ngữ này.
-
-### Có thể xử lý thế nào?
-
-> Tùy mức độ, em có thể để chỉ một request đi lấy dữ liệu mới còn request khác chờ, làm TTL của các key lệch nhau một chút, hoặc tạm dùng dữ liệu cũ trong lúc một request cập nhật cache mới.
-
-### “Single-flight” nghĩa là gì?
-
-> Nghĩa là khi nhiều request cùng cần build lại một cache key, chỉ một request thực sự đi lấy dữ liệu, các request khác chờ dùng cùng kết quả đó.
-
-### “Stale-while-revalidate” nghĩa là gì?
-
-> Có thể hiểu là tạm trả dữ liệu cache cũ trong một khoảng ngắn, đồng thời có một process/request đi cập nhật dữ liệu mới ở phía sau. Cách này chỉ phù hợp nếu business chấp nhận dữ liệu cũ trong khoảng thời gian đó.
+### **Safety net** *(lớp bảo vệ phụ nếu cơ chế chính bị miss)*
 
 ---
 
-# 5. Redis down thì sao?
+# 4. Stale data
 
-> Nếu Redis chỉ là cache, em cố thiết kế để application vẫn có thể đọc từ database khi Redis lỗi. Nhưng em cũng phải cẩn thận: nếu toàn bộ traffic đột ngột chuyển xuống database thì database có thể bị quá tải.
->
-> Nếu Redis đang giữ dữ liệu quan trọng chứ không chỉ cache, ví dụ queue hoặc state cần bền vững, thì yêu cầu về persistence, replication và failover sẽ khác và em cần thiết kế riêng cho vai trò đó.
+## **Stale data** *(cache đang giữ giá trị cũ hơn dữ liệu gốc)*
 
-### Fallback là gì?
+📌 Ví dụ database stock = 3 nhưng Redis vẫn trả 5.
 
-> Là đường xử lý thay thế khi component chính không dùng được. Ví dụ Redis lỗi thì application tạm đọc trực tiếp từ database.
+## 💬 Cách nói
 
-### Source of truth là gì trong cache?
+> Trước khi cache em phải biết business có chấp nhận dữ liệu cũ trong bao lâu. Product description có thể chấp nhận chậm vài phút, nhưng stock hoặc permission nhạy cảm có thể không phù hợp để cache lâu.
 
-> Là nơi mình coi là dữ liệu chính thức. Với cache-aside thông thường, database là dữ liệu chính; Redis chỉ giữ bản copy để đọc nhanh hơn.
+⚠️ **Dễ bị bắt bẻ:**
+
+> “Redis cache luôn consistent với DB.”
+
+✅ **Cách nói an toàn:**
+
+> Cache có thể stale. Em thiết kế TTL/invalidation theo mức freshness business chấp nhận.
 
 ---
 
-# 6. Bài nói 60 giây
+# 5. Cache stampede
 
-> Khi dùng Redis làm cache, em bắt đầu từ việc xác định dữ liệu nào đọc nhiều và có thể chấp nhận chậm cập nhật một khoảng ngắn.
+## Nói hiện tượng trước
+
+> Giả sử một key rất hot vừa hết hạn. Cùng lúc 500 request đều cache miss và cả 500 request cùng query database để rebuild cùng một dữ liệu. Database có thể nhận một burst lớn.
+
+Hiện tượng này thường gọi là **cache stampede**.
+
+## Cách giảm
+
+- lock/single-flight để một request rebuild, request khác chờ hoặc dùng dữ liệu cũ;
+- **stale-while-revalidate** *(tạm trả dữ liệu cũ trong lúc background refresh)*;
+- randomize TTL để nhiều key không hết hạn cùng lúc.
+
+### **Single-flight** *(nhiều request cùng cần một dữ liệu nhưng chỉ một operation thực sự fetch/rebuild)*
+
+---
+
+# 6. Chọn TTL bao nhiêu?
+
+## 💬 Cách nói
+
+> Không có TTL đúng cho mọi dữ liệu. Em chọn dựa trên business freshness, tần suất đọc, tần suất thay đổi và cost khi rebuild.
+
+📌 Ví dụ:
+
+- config ít đổi → TTL dài hơn;
+- inventory thay đổi liên tục → TTL ngắn hoặc không cache theo cách đơn giản;
+- external API rất đắt → cache lâu hơn nếu business cho phép.
+
+⚠️ Nếu nói “TTL 5 phút” hãy sẵn sàng trả lời “tại sao 5 phút?”.
+
+---
+
+# 7. Redis down thì sao?
+
+## 💬 Bài nói
+
+> Nếu Redis chỉ là cache, em thường muốn application vẫn có thể fallback về database. Nhưng phải cẩn thận vì nếu Redis down, toàn bộ traffic có thể đổ xuống DB và làm DB quá tải.
 >
-> Application đọc Redis trước; nếu không có thì đọc database rồi ghi lại cache với TTL. Khi database thay đổi, em xóa hoặc cập nhật cache để giảm khả năng trả dữ liệu cũ.
->
-> Em cũng để ý trường hợp nhiều request cùng cache miss vì một key vừa expire, vì lúc đó toàn bộ request có thể cùng đổ xuống database. Nếu cần em sẽ giới hạn việc rebuild cache hoặc cho một request cập nhật còn request khác dùng kết quả chung.
+> Nếu Redis đang giữ state quan trọng chứ không chỉ cache, requirement về persistence, replication và high availability sẽ khác nhiều.
 
-## Cách nhớ
+### **Fallback** *(dùng phương án thay thế khi dependency chính không dùng được)*
 
-`Có thực sự cần cache? → đọc Redis trước → miss thì đọc DB → update/xóa cache khi data đổi → tránh nhiều request cùng miss → có fallback khi Redis lỗi`
+### **High Availability / HA** *(thiết kế để service vẫn phục vụ khi một node gặp lỗi)*
+
+---
+
+# 8. Redis có phải database chính không?
+
+Có thể trong một số architecture, nhưng không nên mặc định.
+
+## 💬 Cách nói an toàn
+
+> Trong các case cache của em, database chính vẫn là source of truth và Redis là lớp tăng tốc. Nếu dùng Redis làm state chính thì phải thiết kế persistence/replication/failure recovery riêng.
+
+---
+
+# 9. Eviction
+
+## **Eviction** *(Redis tự loại key khi memory đầy theo policy cấu hình)*
+
+Nếu Redis có memory limit, khi đầy nó có thể:
+
+- reject write;
+- hoặc xóa key theo eviction policy.
+
+⚠️ Đây là lý do không nên coi cache key chắc chắn tồn tại cho đến TTL.
+
+---
+
+# 10. Rate limiting bằng Redis
+
+Redis thường được dùng để lưu counter/token vì update nhanh và có TTL.
+
+📌 Ví dụ:
+
+```text
+user:123:requests:minute = 37
+TTL = thời gian còn lại của cửa sổ
+```
+
+Nhưng thuật toán rate limit có nhiều loại: fixed window, sliding window, token bucket... Nếu chưa cần thì không mở quá sâu.
+
+---
+
+# 🎯 Interviewer hỏi tiếp
+
+### Tại sao Redis nhanh?
+
+> Dữ liệu chủ yếu truy cập trong memory, cấu trúc dữ liệu được tối ưu và Redis xử lý command rất hiệu quả. Nhưng network round-trip vẫn tồn tại, nên không phải “0 latency”.
+
+### Cache có thể làm data sai không?
+
+> Có nếu invalidation sai hoặc TTL quá dài. Vì vậy cache không nên là nơi duy nhất enforce business invariant quan trọng nếu source of truth nằm ở DB.
+
+### Nếu delete cache trước rồi DB update fail?
+
+> Cache miss sẽ đọc lại DB cũ và rebuild lại giá trị cũ. Flow write/invalidation cần được thiết kế theo consistency requirement; không có một thứ tự đúng cho mọi hệ thống.
+
+### Redis lock có luôn an toàn không?
+
+> Không nên nói tuyệt đối. Distributed lock cần ownership, TTL và xử lý expiry/process pause. Với nghiệp vụ rất nhạy cảm em phải xem guarantee thực tế thay vì coi một `SETNX` đơn giản là đủ.
+
+---
+
+# ⚠️ Những câu dễ bị bắt bẻ
+
+❌ “Redis nhanh hơn DB nên em cache mọi thứ.”  
+✅ “Em cache khi read cost cao và business chấp nhận được trade-off freshness/invalidation.”
+
+❌ “TTL giải quyết consistency.”  
+✅ “TTL giới hạn thời gian cache tồn tại nhưng trong thời gian đó dữ liệu vẫn có thể stale.”
+
+❌ “Redis down thì cứ fallback DB.”  
+✅ “Có thể fallback nếu Redis chỉ là cache, nhưng cần bảo vệ DB khỏi traffic spike.”
+
+---
+
+# 📌 Cách nhớ
+
+**Có bottleneck không? → cache-aside → hit/miss → TTL → invalidation → stale data → stampede → Redis down/fallback**
