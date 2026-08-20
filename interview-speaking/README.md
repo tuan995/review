@@ -1,57 +1,72 @@
 # Backend Interview Speaking Handbook
 
-Tài liệu này dùng để **luyện nói phỏng vấn**, không phải để học thuộc định nghĩa.
+> **Mục tiêu:** biến kiến thức Backend thành câu trả lời phỏng vấn tự nhiên, dễ nhớ, có ví dụ thực tế và vẫn trả lời được khi interviewer hỏi sâu.
 
-Mục tiêu của bộ này là:
+Bộ này **không phải một giáo trình để học thuộc**. Quy tắc chung là:
 
 > **Nói đơn giản trước → thuật ngữ sau → ví dụ thực tế → câu hỏi đào sâu.**
 
-Nếu một ý có thể giải thích bằng tiếng Việt dễ hiểu thì hãy giải thích trước. Sau đó mới gắn tên kỹ thuật để vừa nói tự nhiên, vừa học được thuật ngữ chuyên môn.
+Nếu một ý có thể giải thích bằng tiếng Việt dễ hiểu thì giải thích trước. Sau đó mới gắn tên kỹ thuật để vừa nói tự nhiên, vừa biết đúng thuật ngữ.
 
 ---
 
-# Ưu tiên học: không học ngang tất cả các chương
+# 1. GitHub là nguồn chuẩn duy nhất
 
-Bộ tài liệu đã khá rộng. Từ giờ **không nên cố học 13 chương với mức độ như nhau**.
+Repo này là **single source of truth** *(nguồn chính thức duy nhất của handbook)*.
+
+Quy tắc:
+
+- Nội dung đã chốt phải được đưa về GitHub.
+- Chat chỉ dùng để **luyện, sửa, bổ sung hoặc phát hiện điểm yếu**.
+- Không coi một đoạn trả lời nằm rải rác trong chat là bản chính thức nếu chưa được cập nhật vào repo.
+- Có thể mở nhiều chat mock interview khác nhau mà không sợ tài liệu bị phân tán, vì bản chuẩn vẫn ở đây.
+
+Nếu một chat luyện phát hiện phần nào còn yếu, quay lại chat quản lý handbook và cập nhật đúng phần đó vào GitHub.
+
+---
+
+# 2. Không học ngang tất cả các chương
+
+Bộ tài liệu đã đủ rộng. Từ giờ **không mở rộng lan man** và không cố học mọi thứ với cùng độ sâu.
 
 ## 🟢 Core — phải chắc trước
 
-### 1. Node.js
+### Node.js
 
 Ưu tiên: [Node.js & Event Loop](03-nodejs.md)
 
-Các ý cần nói được bằng lời của mình:
+Cần nói được:
 
-- Node.js là gì, phù hợp với I/O-bound workload như thế nào.
+- Node.js là gì và phù hợp với I/O-bound workload như thế nào.
 - Main JavaScript thread, Event Loop, async I/O.
-- `async/await`, Promise, microtask ở mức đủ giải thích.
-- `Promise.all` và tại sao có thể gây quá nhiều công việc đồng thời.
+- Promise, `async/await`, microtask ở mức đủ giải thích.
+- `Promise.all` và vấn đề quá nhiều task đồng thời.
 - CPU-bound và khi nào cần Worker Threads.
 - Stream và backpressure ở mức hiểu hiện tượng.
 
-Không cần bắt đầu bằng libuv internals. Chỉ đi sâu khi interviewer hỏi tiếp.
+Không tự đi sâu vào libuv internals nếu interviewer chưa hỏi.
 
-### 2. NestJS
+### NestJS
 
-Repo đã có phần lý thuyết riêng:
+Theory đã có ở:
 
 - [NestJS core concepts](../nest/core.md)
 - [NestJS request lifecycle](../nest/req_lc.md)
 
-Các ý nên ưu tiên:
+Cần chắc:
 
 - **Module** *(gom các thành phần liên quan thành một nhóm chức năng)*.
-- **Controller** *(nhận request và chuyển công việc cho service/provider)*.
+- **Controller** *(nhận request và chuyển xử lý cho service/provider)*.
 - **Provider / Service** *(class do Nest quản lý và có thể inject vào nơi khác)*.
-- **Dependency Injection — DI** *(Nest tạo và truyền dependency vào class thay vì class tự khởi tạo mọi thứ)*.
-- **Middleware** *(xử lý request trước khi tới phần authorization/handler; ví dụ logging, correlation ID)*.
+- **Dependency Injection — DI** *(Nest tạo và truyền dependency vào class thay vì class tự tạo tất cả dependency)*.
+- **Middleware** *(xử lý request sớm, ví dụ logging/correlation ID)*.
 - **Guard** *(quyết định request có được đi tiếp hay không; thường dùng auth/permission)*.
 - **Pipe** *(validate hoặc transform input trước khi vào handler)*.
-- **Interceptor** *(bọc quanh quá trình chạy handler; có thể log timing, transform response, caching...)*.
+- **Interceptor** *(bọc quanh handler; có thể log timing, transform response, cache...)*.
 - **Exception Filter** *(bắt exception và chuyển thành response có kiểm soát)*.
-- Request lifecycle ở mức hiểu flow, không chỉ học thuộc thứ tự.
+- Request lifecycle ở mức hiểu **mỗi thành phần giải quyết vấn đề gì**, không chỉ thuộc thứ tự.
 
-Cách nhớ đơn giản:
+Mental model:
 
 ```text
 Request
@@ -73,9 +88,7 @@ Interceptor (after)
 Response
 ```
 
-**Không học thứ tự này như một câu thần chú.** Phải biết mỗi thành phần giải quyết vấn đề gì và vì sao không nhét tất cả logic vào Controller.
-
-### 3. Database
+### Database
 
 Ưu tiên:
 
@@ -83,159 +96,207 @@ Response
 - [Transaction & Concurrency](05-transaction-concurrency.md)
 - [Promise.all, DB Pool & Concurrency Limit](06-concurrency-limit.md)
 
-Các ý cần chắc:
+Cần chắc:
 
-- Index là gì, tại sao có index vẫn có thể không được dùng.
+- Index là gì, khi nào database có thể không dùng index.
 - Composite index và thứ tự column.
-- `EXPLAIN` / execution plan dùng để kiểm tra gì.
+- `EXPLAIN` / execution plan để kiểm tra gì.
 - Transaction, commit, rollback, ACID bằng ví dụ.
-- Race condition và cách tránh read-check-write bị sai.
-- Connection pool là gì và vì sao có thể timeout.
+- Race condition và vấn đề read-check-write.
+- Connection pool là gì và tại sao có thể timeout.
 - Concurrency limit và tại sao tăng pool không phải lúc nào cũng là lời giải.
 
 ---
 
 ## 🟡 Follow-up — học sau khi core ổn
 
-Các phần này rất hữu ích vì nối với kinh nghiệm thực tế, nhưng không nên chiếm thời gian trước Node/Nest/DB:
-
-- [Kinh nghiệm dự án Backend / Shopify](02-project-experience.md)
+- [Project Experience](02-project-experience.md)
 - [API Integration & Rate Limit](07-api-rate-limit.md)
 - [Background Job, Cron & Queue](08-background-jobs.md)
 - [Production Problems & Debugging](12-production-problems.md)
 
-Đây là nhóm giúp trả lời câu hỏi kiểu:
+Đây là nhóm dùng nhiều cho các câu:
 
-> “Em gặp khó khăn gì trong dự án?”
-
-hoặc:
-
-> “Tại sao em chọn cách đó?”
+- “Em gặp khó khăn gì trong dự án?”
+- “Tại sao em chọn cách đó?”
+- “Em debug production issue như thế nào?”
 
 ---
 
-## 🔴 Deep dive / Optional — chỉ học khi JD hoặc interviewer dẫn tới
+## 🔴 Deep dive / Optional
 
 - [Redis & Caching](09-redis-cache.md)
 - [AWS S3 & Large File Upload](10-aws-s3.md)
 - [Stripe Payment & Webhook](11-stripe-webhook.md)
 - [System Design](13-system-design.md)
 
-Không bỏ các chương này, nhưng **không cần học sâu trước khi Node/Nest/DB đã chắc**.
+Giữ để dùng khi JD hoặc interviewer dẫn tới. **Không học sâu trước khi Node/Nest/DB đã chắc.**
 
 ---
 
-# Ba tầng tài liệu
+# 3. Ba tầng tài liệu
 
-Để tránh bị ngợp, hãy xem repo theo 3 tầng:
-
-## 1. Theory — hiểu kiến thức
+## Theory — để hiểu
 
 Các thư mục cũ như `nodejs/`, `nest/`, `database/`, `postgresql/`, `redis/`...
 
-Dùng khi cần hiểu hoặc tra cứu concept.
+Dùng để học bản chất hoặc tra cứu.
 
-## 2. Speaking — biết nói trong interview
+## Speaking — để nói
 
 Thư mục `interview-speaking/`.
 
-Mục tiêu là biến kiến thức thành câu trả lời tự nhiên, có ví dụ và có nhánh follow-up.
+Mỗi chủ đề nên có:
 
-## 3. Rapid Review — chỉ ôn nhanh trước interview
+- 💬 **Bài nói** — câu trả lời có thể luyện trực tiếp.
+- 🧠 **Hiểu sâu** — giải thích cơ chế.
+- 📌 **Ví dụ** — case cụ thể.
+- 🎯 **Interviewer hỏi tiếp** — nhánh đào sâu.
+- ⚠️ **Dễ bị bắt bẻ** — câu quá tuyệt đối hoặc quá nhiều jargon.
+- ✅ **Cách nói an toàn** — phiên bản rõ và chính xác hơn.
+- 🧾 **Thuật ngữ** — từ chuyên môn + nghĩa đơn giản.
 
-Chưa cần tạo thêm nhiều file ngay. Khi core đã chắc, Rapid Review chỉ nên chứa:
+## Rapid Review — chỉ ôn nhanh
+
+Chỉ làm khi core đã chắc.
+
+Mỗi câu chỉ cần:
 
 - câu hỏi;
 - 3–5 ý chính;
 - một ví dụ;
-- một câu dễ bị bắt bẻ.
+- một bẫy dễ nói sai.
 
 **Không biến Rapid Review thành handbook thứ hai.**
 
 ---
 
-# Mức độ sâu trong từng chủ đề
+# 4. Xây 8–12 “câu chuyện thật” từ project
 
-Khi học hoặc bổ sung tài liệu, chia kiến thức thành 3 mức:
+Đây là phần rất quan trọng.
 
-### 🟢 Core
+Interviewer thường nhớ một case thực tế rõ ràng hơn một định nghĩa hoàn hảo. Không cần 50 case. Chỉ cần khoảng **8–12 câu chuyện thật mình nhớ rõ** và dùng lại chúng cho nhiều loại câu hỏi.
 
-Phải tự giải thích được mà không nhìn tài liệu.
+Các story nên ưu tiên:
 
-Ví dụ:
+1. `Promise.all` → nhiều query → connection pool timeout.
+2. Shopify data sync → local DB thay vì gọi API liên tục.
+3. Inventory thay đổi → webhook + job kiểm tra lại.
+4. API rate limit / 429 / retry.
+5. Retry request tạo dữ liệu → nguy cơ duplicate / idempotency.
+6. Upload file lớn ~170MB → Nginx limit / S3 direct upload.
+7. Cron chạy duplicate khi có nhiều process/instance.
+8. Redis/cache — chỉ dùng case thực tế mình đã làm và nhớ rõ.
+9. Stripe subscription/webhook/state sync.
+10. Một production incident khác mình trực tiếp debug và có thể kể rõ.
 
-- Event Loop là gì?
-- Dependency Injection giải quyết vấn đề gì?
-- Index là gì?
-- Transaction để làm gì?
+Một story tốt có thể dùng cho nhiều câu hỏi:
 
-### 🟡 Follow-up
+- khó khăn trong dự án;
+- Node.js concurrency;
+- database;
+- performance;
+- debugging;
+- architecture;
+- trade-off;
+- failure handling;
+- “nếu làm lại sẽ thay đổi gì?”.
 
-Biết giải thích thêm 2–3 câu nếu interviewer hỏi sâu.
-
-Ví dụ:
-
-- `setImmediate` vs `setTimeout(0)`.
-- Guard vs Interceptor.
-- Composite index và leftmost prefix.
-- Optimistic vs pessimistic locking.
-
-### 🔴 Deep dive
-
-Chỉ đi sâu khi interviewer thật sự hỏi hoặc JD yêu cầu.
-
-Ví dụ:
-
-- libuv internals chi tiết.
-- edge case rất sâu của isolation level.
-- distributed locking implementation chi tiết.
-- sharding strategy ở scale lớn.
-
-**Nguyên tắc:** đừng tự đưa cuộc phỏng vấn vào deep dive nếu câu hỏi ban đầu chưa yêu cầu.
+**Không bịa thêm case chỉ để đủ số lượng.** Story nào không nhớ rõ thì không dùng như kinh nghiệm thật.
 
 ---
 
-# Format của một câu trả lời tốt
+# 5. Cấu trúc bắt buộc của một Project Story
 
-Mỗi chủ đề quan trọng nên có một **câu trả lời mặc định 60–90 giây** trước.
+Mỗi story nên đi theo flow:
 
-Sau đó mới tới phần giải thích sâu.
+> **Bối cảnh → Vấn đề → Em kiểm tra gì → Nguyên nhân → Giải pháp → Tại sao chọn → Đổi lại mất gì → Kết quả → Nếu làm lại → Cách tránh tái diễn.**
 
-Format trong các chương:
+Ví dụ connection pool:
 
-- 💬 **Bài nói** — đoạn có thể luyện nói trực tiếp.
-- 🧠 **Hiểu sâu** — giải thích tại sao.
-- 📌 **Ví dụ** — tình huống cụ thể.
-- 🎯 **Interviewer hỏi tiếp** — nhánh câu hỏi tiếp theo.
-- ⚠️ **Dễ bị bắt bẻ** — câu quá tuyệt đối hoặc quá nhiều jargon.
-- ✅ **Cách nói an toàn** — phiên bản rõ và chính xác hơn.
-- 🧾 **Thuật ngữ** — từ chuyên môn kèm nghĩa đơn giản.
+> Trong một background job em cần xử lý nhiều shop. Ban đầu em dùng `Promise.all` cho toàn bộ danh sách để job chạy nhanh hơn. Khi số shop tăng, số query database chạy cùng lúc tăng mạnh và Prisma bắt đầu timeout khi lấy connection. Em kiểm tra flow của job và connection pool rồi xác định nguyên nhân là quá nhiều task cùng dùng database. Em chuyển sang giới hạn số shop xử lý đồng thời. Cách này làm job lâu hơn một chút nhưng database ổn định hơn và giảm timeout.
+
+## Phải có câu “Nếu làm lại bây giờ?”
+
+Sau mỗi story, tự hỏi:
+
+> **Nếu được làm lại từ đầu, em sẽ cải thiện gì?**
 
 Ví dụ:
 
-> **Idempotency** *(cùng một thao tác bị chạy lại nhiều lần nhưng không tạo kết quả sai hoặc bị nhân đôi)*.
+> Lúc đó concurrency limit đã giải quyết được timeout. Nếu làm lại với workload lớn hơn, em sẽ thêm metrics cho pool usage và job latency ngay từ đầu, đồng thời cân nhắc queue nếu cần retry và persistence tốt hơn.
 
-Mục tiêu không phải học thuộc tiếng Anh mà là **nghe thấy thuật ngữ và hiểu hiện tượng phía sau nó**.
+Mục tiêu không phải chê cách cũ. Mục tiêu là cho thấy mình hiểu **giới hạn của giải pháp và điều mình học được sau đó**.
 
 ---
 
-# Nguyên tắc dùng thuật ngữ
+# 6. Không học thuộc nguyên văn — chỉ nhớ 5–7 mốc
 
-## 1. Nói hiện tượng trước, gọi tên sau
+Không học một paragraph dài.
+
+Interviewer chen ngang một câu là rất dễ mất mạch nếu mình đang đọc thuộc trong đầu.
+
+Mỗi câu trả lời chỉ nhớ 5–7 mốc.
 
 Ví dụ:
 
-> Khi một cache key hết hạn, có thể hàng trăm request cùng lúc không tìm thấy cache và đều query database. Hiện tượng này thường gọi là **cache stampede**.
+```text
+Nhiều shop
+→ Promise.all
+→ query tăng cùng lúc
+→ pool hết connection
+→ query chờ / timeout
+→ limit concurrency
+→ DB ổn định hơn
+```
 
-Nếu quên tên thuật ngữ, mình vẫn giải thích được vấn đề.
+Từ các mốc đó, tự nói lại bằng lời của mình.
 
-## 2. Nếu nói thuật ngữ, phải tự giải thích được trong 1–2 câu
+Nếu cách nói mỗi lần hơi khác nhau nhưng ý vẫn đúng thì **đó là tín hiệu tốt** — nghĩa là mình hiểu chứ không chỉ thuộc.
+
+---
+
+# 7. Khi không chắc thì nói thế nào?
+
+**Không đoán để lấp chỗ trống.**
+
+Phải phân biệt rõ:
+
+- cái mình **đã trực tiếp làm**;
+- cái mình **biết về lý thuyết**;
+- cái mình **đang suy luận / đề xuất nếu gặp lại**.
+
+Có thể dùng các câu sau:
+
+> **“Phần implementation/config cụ thể em không nhớ chính xác, nhưng flow em xử lý lúc đó là…”**
+
+> **“Em không nhớ chính xác con số nên em không muốn khẳng định, nhưng nguyên tắc em dùng là…”**
+
+> **“Phần này em chưa trực tiếp triển khai sâu. Theo cách em hiểu thì…”**
+
+> **“Case đó em chưa gặp trực tiếp. Nếu gặp, em sẽ bắt đầu kiểm tra từ…”**
+
+> **“Em nhớ hướng xử lý, còn API/config chi tiết em sẽ cần kiểm tra lại documentation để chắc chắn.”**
+
+Đây không phải né câu hỏi. Đây là cách **không biến một chi tiết mình không nhớ thành một câu trả lời sai**.
+
+---
+
+# 8. Nguyên tắc dùng thuật ngữ
+
+## Nói hiện tượng trước, gọi tên sau
+
+Ví dụ:
+
+> Khi một cache key hết hạn, hàng trăm request có thể cùng miss cache và cùng query database. Hiện tượng này thường gọi là **cache stampede**.
+
+## Nếu dùng thuật ngữ, phải giải thích được trong 1–2 câu
 
 Ví dụ:
 
 > **Connection pool** *(một nhóm connection database được giữ sẵn để application tái sử dụng; nếu tất cả đang bận thì query mới phải chờ)*.
 
-## 3. Không dùng jargon chỉ để câu trả lời nghe “senior”
+## Không dùng jargon chỉ để nghe “senior”
 
 ❌
 
@@ -243,135 +304,104 @@ Ví dụ:
 
 ✅
 
-> Em giới hạn số shop chạy cùng lúc để database không phải nhận quá nhiều query trong cùng một thời điểm. Cách này làm job ổn định hơn.
+> Em giới hạn số shop chạy cùng lúc để database không nhận quá nhiều query trong cùng một thời điểm. Cách này làm job ổn định hơn.
 
-Nếu interviewer muốn sâu hơn, lúc đó mới nói **throughput**, **bounded concurrency**, **contention**.
+Nếu interviewer hỏi sâu, lúc đó mới dùng `throughput`, `bounded concurrency`, `contention`.
 
-## 4. Tránh câu tuyệt đối
+## Tránh câu tuyệt đối
 
-Ví dụ không nói:
+❌ “Có index thì query sẽ nhanh.”
 
-> “Có index thì query sẽ nhanh.”
-
-Nên nói:
-
-> “Index có thể giúp database tìm dữ liệu nhanh hơn, nhưng optimizer vẫn có thể chọn scan nếu đọc phần lớn table hoặc index không phù hợp với query.”
+✅ “Index có thể giúp database tìm dữ liệu nhanh hơn, nhưng optimizer vẫn có thể chọn scan nếu index không phù hợp hoặc query phải đọc phần lớn table.”
 
 ---
 
-# Flow trả lời câu hỏi kinh nghiệm
+# 9. Mức độ sâu khi trả lời
 
-Với câu hỏi **“Em gặp khó khăn gì trong dự án?”**, luyện theo flow:
+### 🟢 Core
 
-> **Bối cảnh → Vấn đề → Em kiểm tra gì → Nguyên nhân → Cách xử lý → Tại sao chọn → Đổi lại mất gì → Kết quả → Cách tránh tái diễn.**
+Phải tự giải thích được mà không nhìn tài liệu.
 
-Ví dụ:
+### 🟡 Follow-up
 
-> Trong một background job em cần xử lý nhiều shop. Ban đầu em dùng `Promise.all` cho toàn bộ danh sách để job chạy nhanh hơn. Khi số shop tăng, số query database chạy cùng lúc tăng mạnh và Prisma bắt đầu timeout khi lấy connection. Em kiểm tra flow của job và connection pool rồi xác định nguyên nhân là quá nhiều task chạy cùng lúc. Em chuyển sang giới hạn số shop xử lý đồng thời. Cách này làm job lâu hơn một chút nhưng database ổn định hơn và giảm timeout.
+Biết thêm 2–3 câu nếu interviewer đào sâu.
 
----
+### 🔴 Deep dive
 
-# Một câu chuyện thật có thể dùng cho nhiều câu hỏi
+Chỉ đi sâu khi interviewer thật sự yêu cầu.
 
-Không cần có 50 câu chuyện khác nhau.
-
-Nên có khoảng **8–12 case thực tế thật sự nhớ rõ**, ví dụ:
-
-- `Promise.all` → connection pool timeout.
-- Shopify data sync → webhook + job kiểm tra lại.
-- API rate limit.
-- Cron chạy nhiều instance.
-- File lớn qua Nginx/S3.
-- Stripe webhook / trạng thái payment.
-- Redis/cache nếu thực tế đã dùng.
-- Một incident production mà mình đã tự debug.
-
-Một case tốt có thể trả lời nhiều câu:
-
-- khó khăn đã gặp;
-- tối ưu performance;
-- concurrency;
-- database;
-- debugging;
-- trade-off;
-- nếu làm lại sẽ thay đổi gì.
+**Không tự kéo mình vào deep dive bằng cách ném ra quá nhiều thuật ngữ trong câu mở đầu.**
 
 ---
 
-# Luôn chuẩn bị câu “Nếu làm lại bây giờ?”
+# 10. English speaking — làm sau, không tạo một bộ kiến thức mới
 
-Sau mỗi case thực tế, tự hỏi:
+Sau khi bản Việt đã chắc, có thể tạo bản English speaking.
 
-> **Nếu được làm lại từ đầu, em có thay đổi gì không?**
+Quy tắc:
 
-Câu trả lời không cần phủ nhận cách cũ.
+- Nội dung kỹ thuật phải **giống bản Việt**.
+- Cùng story, cùng flow, cùng trade-off, cùng follow-up.
+- Chỉ thay cách diễn đạt ngôn ngữ.
+- Không tạo thêm kiến thức mới chỉ vì đang viết tiếng Anh.
 
-Ví dụ:
-
-> Lúc đó concurrency limit đã giải quyết được timeout. Nếu làm lại với workload lớn hơn, em sẽ thêm metrics rõ hơn cho pool usage và job latency từ đầu, đồng thời dùng queue nếu cần retry/persistence tốt hơn.
-
-Cách trả lời này cho thấy mình hiểu giới hạn của giải pháp, không chỉ nhớ “fix đã làm”.
-
----
-
-# Nếu không nhớ chi tiết thì nói thế nào?
-
-Không đoán implementation.
-
-Có thể nói:
-
-> Phần configuration cụ thể em không nhớ chính xác con số, nhưng flow em xử lý là...
-
-hoặc:
-
-> Em chưa gặp case đó trực tiếp. Theo cách em hiểu, em sẽ bắt đầu bằng...
-
-Điều quan trọng là phân biệt rõ:
-
-- cái mình **đã làm**;
-- cái mình **biết về lý thuyết**;
-- cái mình **đang suy luận**.
+Như vậy mình chỉ học **một hệ thống kiến thức**, không phải hai handbook khác nhau.
 
 ---
 
-# Không học thuộc nguyên văn
+# 11. Quy tắc chống phình tài liệu
 
-Nếu học thuộc một paragraph dài, interviewer chen ngang rất dễ làm mất mạch.
+Từ giờ **không thêm chủ đề chỉ vì “có thể interviewer hỏi”**.
 
-Thay vào đó mỗi câu trả lời chỉ nhớ 5–7 mốc.
+Chỉ thêm hoặc mở rộng khi ít nhất một điều đúng:
 
-Ví dụ case connection pool:
-
-```text
-Job nhiều shop
-→ Promise.all
-→ query tăng cùng lúc
-→ pool hết connection
-→ query chờ / timeout
-→ giới hạn concurrency
-→ DB ổn định hơn
-```
-
-Sau đó tự nói thành câu bằng lời của mình.
-
----
-
-# Quy tắc chống phình tài liệu
-
-Từ giờ **không thêm một chủ đề mới chỉ vì “có thể bị hỏi”**.
-
-Chỉ thêm hoặc mở rộng khi ít nhất một trong các điều sau xảy ra:
-
-1. Nó xuất hiện nhiều trong JD/backend interview.
+1. Nó xuất hiện thường xuyên trong Backend JD/interview.
 2. Nó thuộc core Node.js / NestJS / Database.
-3. Trong mock interview mình thực sự bị bí ở phần đó.
-4. Nó là case mình từng làm và có khả năng cao interviewer hỏi từ CV.
+3. Khi mock interview mình thực sự bị bí ở đó.
+4. Nó nằm trong CV/project và có khả năng cao bị hỏi.
+5. Nó giúp hoàn thiện một trong 8–12 project stories thật.
 
-Nếu không thuộc các nhóm trên, để ở mức optional.
+Nếu không thuộc các nhóm trên, để optional.
 
 ---
 
-# Những thuật ngữ hay bị hỏi lại
+# 12. Cách dùng ChatGPT mà không làm loãng tài liệu
+
+Nên tách chat theo vai trò.
+
+## Chat quản lý handbook
+
+Dùng để:
+
+- sửa Markdown;
+- cập nhật GitHub;
+- thêm/sửa project story;
+- bổ sung câu hỏi thực tế sau khi luyện;
+- kiểm tra handbook có bị phình hoặc trùng không.
+
+**Mẫu mở chat:**
+
+> “Đây là chat quản lý Backend Interview Handbook của tôi. GitHub `tuan995/review` là source of truth. Hãy ưu tiên Node.js, NestJS và Database; không mở rộng lan man. Khi sửa tài liệu, giữ format: bài nói → hiểu sâu → thuật ngữ → ví dụ → follow-up → dễ bị bắt bẻ → cách nói an toàn. Với project story phải có ‘Nếu làm lại bây giờ?’ và 5–7 mốc để nhớ.”
+
+## Chat mock interview
+
+Dùng để luyện nói, không chỉnh handbook ngay trong lúc luyện.
+
+**Mẫu mở chat:**
+
+> “Mock interview Backend cho tôi, ưu tiên Node.js → NestJS → Database và project experience. Hỏi từng câu một. Nếu tôi dùng thuật ngữ, hãy hỏi sâu vào đúng thuật ngữ đó. Nếu câu trả lời của tôi có chỗ mơ hồ hoặc dễ bị bắt bẻ, chỉ ra sau khi tôi trả lời. Không hỏi quá nhiều chủ đề optional nếu tôi chưa chắc core.”
+
+## Sau buổi mock interview
+
+Cuối buổi có thể yêu cầu:
+
+> “Tổng hợp những chỗ tôi bị bí thành danh sách ngắn: câu hỏi → tôi thiếu gì → nên cập nhật file nào trong handbook. Không viết lại toàn bộ handbook.”
+
+Sau đó quay về chat quản lý handbook để cập nhật GitHub.
+
+---
+
+# 13. Những thuật ngữ hay bị hỏi lại
 
 | Thuật ngữ | Nghĩa đơn giản |
 |---|---|
@@ -385,19 +415,17 @@ Nếu không thuộc các nhóm trên, để ở mức optional.
 | **Backoff** | Retry nhưng chờ một khoảng rồi mới thử lại, thường tăng dần |
 | **Connection pool** | Nhóm kết nối database được giữ sẵn để tái sử dụng |
 | **Concurrency** | Nhiều task cùng đang trong quá trình xử lý |
-| **Parallelism** | Nhiều task thực sự chạy cùng một thời điểm trên nhiều execution resource |
-| **Race condition** | Kết quả sai vì nhiều request/task cùng thao tác và thứ tự chạy ảnh hưởng kết quả |
-| **Deadlock** | Hai transaction giữ tài nguyên và chờ lẫn nhau nên không bên nào đi tiếp |
-| **TTL** | Thời gian một cache/key còn hiệu lực trước khi hết hạn |
+| **Parallelism** | Nhiều task thực sự thực thi cùng một thời điểm |
+| **Race condition** | Kết quả bị sai vì thứ tự nhiều request/task cùng thao tác ảnh hưởng kết quả |
+| **Deadlock** | Hai transaction giữ resource và chờ lẫn nhau nên không bên nào đi tiếp |
+| **TTL** | Thời gian cache/key còn hiệu lực trước khi hết hạn |
 | **Backpressure** | Làm phía tạo dữ liệu chậm lại khi phía xử lý không theo kịp |
-| **Dependency Injection** | Framework/container tạo dependency và truyền vào class thay vì class tự tạo tất cả dependency |
-| **Provider** | Thành phần do Nest quản lý và có thể được inject vào thành phần khác |
+| **Dependency Injection** | Framework/container tạo dependency và truyền vào class thay vì class tự tạo tất cả |
+| **Provider** | Thành phần do Nest quản lý và có thể inject vào thành phần khác |
 
 ---
 
-# Thứ tự học đề xuất
-
-Nếu thời gian hạn chế, học theo thứ tự:
+# 14. Thứ tự học đề xuất
 
 ```text
 01 Introduction
@@ -412,26 +440,30 @@ NestJS core + request lifecycle
     ↓
 06 DB Pool / Promise.all
     ↓
-02 Project Experience
+02 Project Experience + 8–12 stories
     ↓
 07 API / 08 Jobs / 12 Production
     ↓
-09–11 + 13 khi cần
+09–11 + 13 khi thật sự cần
 ```
 
-Không cần hoàn thành tất cả mới đi phỏng vấn. Mục tiêu là **core chắc trước, breadth sau**.
+Không cần hoàn thành tất cả mới đi phỏng vấn.
+
+> **Core chắc trước → project story thật → breadth sau.**
 
 ---
 
-# Cách luyện hiệu quả
+# 15. Cách luyện một chủ đề
 
 1. Đọc `💬 Bài nói` một lần.
-2. Đóng tài liệu và tự kể lại bằng lời của mình.
-3. Nếu là core, phải tự giải thích được các thuật ngữ chính.
-4. Mở phần `🎯 Interviewer hỏi tiếp` và tự trả lời.
-5. Với mỗi case thực tế, thêm câu: **“Nếu làm lại em sẽ cải thiện gì?”**
-6. Cuối cùng thử nói chủ đề trong 60–90 giây.
+2. Đóng tài liệu.
+3. Nhớ 5–7 mốc và tự kể lại.
+4. Tự giải thích các thuật ngữ mình vừa dùng.
+5. Mở `🎯 Interviewer hỏi tiếp` và trả lời.
+6. Nếu là project story, trả lời thêm: **“Nếu làm lại bây giờ?”**
+7. Nếu không nhớ chi tiết, dùng cách nói an toàn thay vì đoán.
+8. Sau mock interview, chỉ cập nhật những chỗ mình thực sự bị bí.
 
-Mục tiêu cuối cùng không phải nói giống hệt tài liệu. Mục tiêu là:
+Mục tiêu cuối cùng:
 
 > **Hiểu → nói được → bị hỏi sâu vẫn giải thích được → không tự kéo mình vào câu hỏi khó không cần thiết.**
